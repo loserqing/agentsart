@@ -1,0 +1,21 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.crewai_storage/
+
+# Runtime artifacts (regenerated on each server start)
+iterations/
+state.json
+iteration_log.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

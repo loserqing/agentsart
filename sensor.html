@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGENTSART // SENSOR</title>
+    <script src="./js/lib/holistic.js"></script>
+    <script src="./js/lib/camera_utils.js"></script>
+    <script src="./js/api_handler.js?v=20260328a"></script>
+    <style>
+        :root { 
+            --neon-blue: #3d5afe; 
+            --neon-pink: #d500f9; 
+            --neon-gold: #00e5ff; 
+            --bg-dark: #050a10;
+        }
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', 'PingFang SC', 'Courier New', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100vw; height: 100vh;
+        }
+        #error-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            z-index: 1000;
+        }
+        #error-overlay.hidden { display: none; }
+        #error-msg { margin-top: 20px; font-size: 14px; color: #888; }
+        .sensor-iter-badge {
+            position: fixed;
+            right: 14px;
+            bottom: 14px;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            max-width: min(240px, 42vw);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            line-height: 1.35;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: rgba(0, 229, 255, 0.88);
+            background: rgba(5, 10, 18, 0.58);
+            border: 1px solid rgba(0, 229, 255, 0.22);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            pointer-events: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+        .sensor-iter-badge__dot {
+            flex-shrink: 0;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: rgba(0, 229, 255, 0.9);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.55);
+        }
+        .sensor-iter-badge__text { opacity: 0.95; }
+        .kw-flash-overlay {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 80;
+            display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+            padding: 24px 36px; border-radius: 14px;
+            background: rgba(5, 10, 18, 0.72);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 229, 255, 0.22);
+            box-shadow: 0 0 40px rgba(0, 229, 255, 0.08);
+            opacity: 0; pointer-events: none;
+            transition: opacity 1.5s ease;
+        }
+        .kw-flash-overlay.visible { opacity: 1; }
+        .kw-flash-overlay .kw-tag {
+            font-family: 'Segoe UI', 'PingFang SC', monospace;
+            font-size: 15px; color: rgba(0, 229, 255, 0.92);
+            letter-spacing: 0.08em; padding: 5px 14px;
+            border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 5px;
+            text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+        }
+        .kw-flash-overlay .kw-label {
+            width: 100%; text-align: center;
+            font-family: 'Segoe UI', 'PingFang SC', monospace;
+            font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+            color: rgba(0, 229, 255, 0.55); margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="error-overlay" class="hidden">
+        <h2>WEBGPU CORE NOT DETECTED</h2>
+        <p id="error-msg">请使用支持 WebGPU 的现代浏览器访问</p>
+    </div>
+
+    <video id="input-video" playsinline style="display:none"></video>
+    <canvas id="gpuCanvas"></canvas>
+    <div id="kw-flash-overlay" class="kw-flash-overlay" aria-hidden="true"></div>
+    <div id="sensor-iteration-badge" class="sensor-iter-badge" aria-live="polite">
+        <span class="sensor-iter-badge__dot" aria-hidden="true"></span>
+        <span class="sensor-iter-badge__text">同步状态…</span>
+    </div>
+
+    <script type="module">
+        import { VisionSystem } from './js/vision_capture.js?v=20260328h';
+
+        // --- Global State ---
+        let visionSystem = null;
+        let sharedData = {
+            face: null,
+            pose: null,
+            videoRes: { x: 640, y: 480 },
+            faceArea: 0,
+            instantFaceSpeed: 0,
+        };
+
+        /** 持续截图：检测到清晰人脸即保存到 localStorage + 上传服务端 */
+        const CONTINUOUS_CAPTURE_MS = 2000;
+        const UPLOAD_MIN_GAP_MS = 5000;
+        let lastFaceUploadAt = 0;
+        let captureUploading = false;
+
+        /** 轮询服务端状态（badge、关键词闪现等） */
+        const STATUS_POLL_MS = 500;
+        /** 无人脸持续帧数超过此值则清空服务端/本地截图与人类分析（约 1.5s @60fps） */
+        const NO_FACE_FRAMES_CLEAR = 90;
+        let noFaceStreak = 0;
+        let sawFaceThisSession = false;
+        let presenceClearInFlight = false;
+        let lastPollFaceCenter = null;
+        let stableFramesPoll = 0;
+        let lastKnownAnalysisStatus = 'idle';
+
+        // --- Face Detection ---
+        async function initFaceDetection() {
+            try {
+                visionSystem = new VisionSystem(document.getElementById('input-video'), sharedData);
+                await visionSystem.init(); // 触发摄像头权限并启动人脸/躯干追踪
+
+            } catch (error) {
+                console.error('Face detection init failed:', error);
+                const errorOverlay = document.getElementById('error-overlay');
+                const errorMsg = document.getElementById('error-msg');
+                errorMsg.textContent = `摄像头或人脸追踪初始化失败: ${error?.message || '未知错误'}`;
+                errorOverlay.classList.remove('hidden');
+            }
+        }
+
+        // --- WebGPU Setup ---
+        let webgpuDevice = null;
+        let webgpuContext = null;
+        let bgPipeline = null;
+        let uniformBuffer = null;
+        let segmentBuffer = null;
+        let bgBindGroup = null;
+
+        /** /get_data.sensor_client_hints：长时间展陈时可降帧与 DPR（见 main.py 环境变量） */
+        let sensorTargetFps = 60;
+        let sensorMaxDpr = 2;
+        let sensorFrameCapLastTime = 0;
+        let lastConfiguredGpuW = 0;
+        let lastConfiguredGpuH = 0;
+        let lastConfiguredGpuDpr = 0;
+
+        /** 调试：极亮窄带细线；关闭后仅保留柔和 rim + 流体，无「线框高亮」 */
+        const CONTOUR_DEBUG_BRIGHT = false;
+
+        /** 与 main 启动对齐：新 server_boot_at 时清除浏览器内旧截图缓存 */
+        async function syncLocalCaptureWithServerBoot() {
+            try {
+                const r = await fetch('/get_data');
+                if (!r.ok) return;
+                const d = await r.json();
+                if (d.server_boot_at == null) return;
+                const key = 'agentsart_server_boot_at';
+                const cur = String(d.server_boot_at);
+                if (localStorage.getItem(key) !== cur) {
+                    localStorage.removeItem('agentsart_latest_capture');
+                    localStorage.setItem(key, cur);
+                }
+            } catch (e) {
+                console.warn('[AgentsArt] server_boot sync skipped:', e);
+            }
+        }
+
+        function effectiveGpuDpr() {
+            return Math.min(window.devicePixelRatio || 1, sensorMaxDpr);
+        }
+
+        function configureGpuCanvasResolution() {
+            const canvas = document.getElementById('gpuCanvas');
+            if (!canvas || !webgpuContext || !webgpuDevice) return;
+            const dpr = effectiveGpuDpr();
+            const w = Math.max(1, Math.floor(window.innerWidth * dpr));
+            const h = Math.max(1, Math.floor(window.innerHeight * dpr));
+            if (w === lastConfiguredGpuW && h === lastConfiguredGpuH && dpr === lastConfiguredGpuDpr) return;
+            lastConfiguredGpuW = w;
+            lastConfiguredGpuH = h;
+            lastConfiguredGpuDpr = dpr;
+            canvas.width = w;
+            canvas.height = h;
+            const format = navigator.gpu.getPreferredCanvasFormat();
+            webgpuContext.configure({ device: webgpuDevice, format, alphaMode: 'premultiplied' });
+        }
+
+        function applySensorPerfFromPayload(d) {
+            const h = d && d.sensor_client_hints;
+            if (!h || typeof h !== 'object') return;
+            if (h.target_fps != null) {
+                const v = Number(h.target_fps);
+                if (!Number.isNaN(v)) sensorTargetFps = Math.max(15, Math.min(60, Math.round(v)));
+            }
+            if (h.max_dpr != null) {
+                const v = Number(h.max_dpr);
+                if (!Number.isNaN(v)) sensorMaxDpr = Math.max(1, Math.min(3, v));
+            }
+            configureGpuCanvasResolution();
+        }
+
+        async function prefetchSensorClientHints() {
+            try {
+                const r = await fetch('/get_data?t=' + Date.now(), { cache: 'no-store' });
+                if (!r.ok) return;
+                applySensorPerfFromPayload(await r.json());
+            } catch (_) { /* ignore */ }
+        }
+
+        function updateIterationFaceBadge(d) {
+            const wrap = document.getElementById('sensor-iteration-badge');
+            const el = wrap && wrap.querySelector('.sensor-iter-badge__text');
+            if (!el) return;
+            const st = (d && d.face_analysis_status) || 'idle';
+            const hasFace = sharedData.face && sharedData.face.length > 10;
+            let t = '';
+            if (captureUploading) t = '上传中 · Uploading';
+            else if (st === 'analyzing') t = '分析中 · Analyzing';
+            else if (st === 'ready') t = '就绪 · Ready';
+            else if (st === 'error') t = '错误 · Error';
+            else if (hasFace) t = '追踪中 · Tracking';
+            else t = '待机 · Idle';
+            el.textContent = t;
+        }
+
+        /** MediaPipe Face Mesh 脸廓（单条闭合折线） */
+        const FACE_OVAL_INDICES = [
+            10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+            400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
+            54, 103, 67, 109
+        ];
+        const SEG_MAX = 160;
+        const segScratch = new Float32Array(SEG_MAX * 4);
+        /** 轮廓线段端点时间平滑，减轻 MediaPipe 抖动导致的细线闪烁 */
+        const smoothSegScratch = new Float32Array(SEG_MAX * 4);
+        const SEG_LINE_SMOOTH = 0.11;
+        let smoothSegPrimed = false;
+        let lastSmoothedSegFloats = 0;
+        const persistScratch = new Float32Array(SEG_MAX * 4);
+        let persistNF = 0;
+        let persistNL = 0;
+        let persistNR = 0;
+        let persistByteLength = 16;
+        let persistDetailLo = 0;
+        let persistDetailHi = 0;
+        let trackedContourFade = 0;
+        /** 脸/手轮廓细线慢显慢隐（与物理场 contour_fade 解耦） */
+        let trackedContourLineAlpha = 0;
+
+        /** 摄像头归一化坐标 → 全屏画布内 object-fit:contain 下的 UV（与画面中人像比例一致） */
+        function mapLandmarkToCanvasUV(x, y, vw, vh, cw, ch) {
+            const scale = Math.min(cw / vw, ch / vh);
+            const dispW = vw * scale;
+            const dispH = vh * scale;
+            const ox = (cw - dispW) * 0.5;
+            const oy = (ch - dispH) * 0.5;
+            const px = ox + x * dispW;
+            const py = oy + y * dispH;
+            return [px / cw, py / ch];
+        }
+
+        function pushSegCanvas(out, o, lm, ia, ib, vw, vh, cw, ch, minVis = null) {
+            if (!lm || !lm[ia] || !lm[ib]) return false;
+            if (minVis != null) {
+                const pa = lm[ia];
+                const pb = lm[ib];
+                if (pa.visibility != null && pa.visibility < minVis) return false;
+                if (pb.visibility != null && pb.visibility < minVis) return false;
+            }
+            const a = mapLandmarkToCanvasUV(lm[ia].x, lm[ia].y, vw, vh, cw, ch);
+            const b = mapLandmarkToCanvasUV(lm[ib].x, lm[ib].y, vw, vh, cw, ch);
+            out[o] = a[0];
+            out[o + 1] = a[1];
+            out[o + 2] = b[0];
+            out[o + 3] = b[1];
+            return true;
+        }
+
+        function pushPolylineClosed(out, o, lm, indices, vw, vh, cw, ch, minVis = null) {
+            let n = 0;
+            const len = indices.length;
+            if (!lm || len < 2) return { o, n };
+            const L = Math.min(len, 64);
+            for (let i = 0; i < L && o < SEG_MAX * 4; i++) {
+                const i0 = indices[i];
+                const i1 = indices[(i + 1) % L];
+                if (pushSegCanvas(out, o, lm, i0, i1, vw, vh, cw, ch, minVis)) {
+                    o += 4;
+                    n++;
+                }
+            }
+            return { o, n };
+        }
+
+        /** 仅脸部椭圆轮廓，不包含手部（手部不参与流体与线场） */
+        function buildSegmentBuffer(face, vw, vh, cw, ch) {
+            segScratch.fill(0);
+            let o = 0;
+            let nFace = 0;
+            const vww = Math.max(1, vw);
+            const vhh = Math.max(1, vh);
+            const cww = Math.max(1, cw);
+            const chh = Math.max(1, ch);
+            let nOvalSeg = 0;
+
+            if (face && face.length > 10) {
+                const r = pushPolylineClosed(segScratch, o, face, FACE_OVAL_INDICES, vww, vhh, cww, chh);
+                o = r.o;
+                nOvalSeg = r.n;
+                nFace += r.n;
+            }
+
+            const detailLo = nOvalSeg;
+            const detailHi = nOvalSeg;
+
+            return {
+                nFace,
+                nLeft: 0,
+                nRight: 0,
+                segFaceDetailLo: detailLo,
+                segFaceDetailHi: detailHi,
+                byteLength: Math.max(16, o * 4),
+            };
+        }
+
+        async function initWebGPU() {
+            const errorOverlay = document.getElementById('error-overlay');
+            const errorMsg = document.getElementById('error-msg');
+
+            function showWebGPUError(message) {
+                errorMsg.textContent = message;
+                errorOverlay.classList.remove('hidden');
+            }
+
+            if (!navigator.gpu) {
+                showWebGPUError('当前浏览器未启用 WebGPU，请使用最新版 Chrome/Edge 并开启硬件加速');
+                return false;
+            }
+            
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                showWebGPUError('检测到浏览器支持 WebGPU，但未获取到 GPU 适配器（可能是系统/驱动/远程桌面限制）');
+                return false;
+            }
+
+            webgpuDevice = await adapter.requestDevice();
+            if (!webgpuDevice) {
+                showWebGPUError('WebGPU 设备创建失败，请重启浏览器或更新显卡驱动后重试');
+                return false;
+            }
+            
+            const canvas = document.getElementById('gpuCanvas');
+            webgpuContext = canvas.getContext('webgpu');
+            if (!webgpuContext) {
+                showWebGPUError('无法获取 WebGPU Canvas 上下文，请确认浏览器版本与图形硬件设置');
+                return false;
+            }
+
+            const format = navigator.gpu.getPreferredCanvasFormat();
+            lastConfiguredGpuW = 0;
+            lastConfiguredGpuH = 0;
+            lastConfiguredGpuDpr = 0;
+            configureGpuCanvasResolution();
+
+            uniformBuffer = webgpuDevice.createBuffer({
+                size: 256,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+            segmentBuffer = webgpuDevice.createBuffer({
+                size: SEG_MAX * 16,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            });
+
+            // 1. 流体背景：仅通过线段引力扭曲 fbm 采样（无高对比叠色）
+            const bgShaderCode = `
+                struct Uniforms {
+                    res: vec2<f32>,
+                    time: f32,
+                    impact: f32,
+                    volatility: f32,
+                    motion: f32,
+                    presence: f32,
+                    left_presence: f32,
+                    right_presence: f32,
+                    seg_face: f32,
+                    seg_left: f32,
+                    seg_right: f32,
+                    contour_debug: f32,
+                    seg_face_detail_lo: f32,
+                    seg_face_detail_hi: f32,
+                    contour_fade: f32,
+                    /** 头部轮廓显隐的额外平滑（0–1），避免背景引力/流速/轮廓光骤变 */
+                    silhouette_blend: f32,
+                    /** 轮廓窄带（细线/rim/线旁流体提亮）独立渐显渐隐 */
+                    contour_line_alpha: f32,
+                    face_area: f32,
+                    contour_breath: f32,
+                    ripple_phase: f32,
+                    face_cx: f32,
+                    face_cy: f32,
+                };
+                @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+                @group(0) @binding(1) var<storage, read> segments: array<vec4<f32>>;
+
+                fn toNdc(uv: vec2<f32>, res: vec2<f32>) -> vec2<f32> {
+                    return vec2<f32>(
+                        (0.5 - uv.x) * 2.0 * (res.x / res.y),
+                        (uv.y - 0.5) * 2.0
+                    );
+                }
+
+                fn closest_on_seg(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+                    let ab = b - a;
+                    let ab2 = dot(ab, ab);
+                    let t = select(0.0, clamp(dot(p - a, ab) / ab2, 0.0, 1.0), ab2 > 1e-10);
+                    return a + ab * t;
+                }
+
+                /**
+                 * xy=引力; z=宽场贴近度; w=窄带贴近度(只在线条附近高)
+                 */
+                fn segment_metrics(p: vec2<f32>, ax: f32, ay: f32, bx: f32, by: f32, k: f32, pr: f32, decaySteep: f32) -> vec4<f32> {
+                    let a = toNdc(vec2<f32>(ax, ay), uniforms.res);
+                    let b = toNdc(vec2<f32>(bx, by), uniforms.res);
+                    let c = closest_on_seg(p, a, b);
+                    let d = distance(p, c);
+                    let wNearLoose = exp(-d * d * k * 3.0 * decaySteep) * pr;
+                    let tightK = 3.85 + uniforms.contour_debug * 22.0;
+                    let wNearTight = exp(-d * d * k * tightK * mix(1.0, decaySteep, 0.22)) * pr;
+                    let wPull = exp(-d * d * k * 2.8 * decaySteep) * pr;
+                    let dir = c - p;
+                    let len = max(length(dir), 1e-5);
+                    let dirN = dir / len;
+                    return vec4<f32>(dirN.x * wPull, dirN.y * wPull, wNearLoose, wNearTight);
+                }
+
+                fn hash(p: vec2<f32>) -> f32 {
+                    var p3 = fract(vec3<f32>(p.xyx) * 0.13);
+                    p3 += dot(p3, p3.yzx + 3.33);
+                    return fract((p3.x + p3.y) * p3.z);
+                }
+                fn noise(p: vec2<f32>) -> f32 {
+                    let i = floor(p); let f = fract(p);
+                    let u = f * f * (3.0 - 2.0 * f);
+                    return mix(
+                        mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+                        mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y
+                    );
+                }
+                fn fbm(p: vec2<f32>) -> f32 {
+                    var v = 0.0; var a = 0.5;
+                    let rot = mat2x2<f32>(cos(0.57), sin(0.57), -sin(0.57), cos(0.57));
+                    var p_mut = p;
+                    for (var i = 0; i < 6; i = i + 1) { // 稍微降低迭代次数以兼顾粒子渲染性能
+                        v += a * noise(p_mut);
+                        p_mut = rot * p_mut * 2.15 + vec2<f32>(100.0);
+                        a *= 0.48;
+                    }
+                    return v;
+                }
+
+                /** 脸部椭圆闭合折线内部（segments[0..nF) 顺序与几何一致） */
+                fn face_interior_winding(p: vec2<f32>, nF: i32) -> f32 {
+                    if (nF < 3) { return 0.0; }
+                    var inside = false;
+                    for (var i: i32 = 0; i < 160; i = i + 1) {
+                        if (i >= nF) { break; }
+                        let s = segments[i];
+                        let a = toNdc(vec2<f32>(s.x, s.y), uniforms.res);
+                        let b = toNdc(vec2<f32>(s.z, s.w), uniforms.res);
+                        let dy = b.y - a.y;
+                        if (abs(dy) < 1e-6) { continue; }
+                        let xinters = (b.x - a.x) * (p.y - a.y) / dy + a.x;
+                        if (((a.y > p.y) != (b.y > p.y)) && (p.x < xinters)) {
+                            inside = !inside;
+                        }
+                    }
+                    return select(0.0, 1.0, inside);
+                }
+
+                @vertex fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+                    var pos = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+                    return vec4<f32>(pos[vertexIndex], 0.0, 1.0);
+                }
+
+                @fragment fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
+                    let res = uniforms.res;
+                    var uv = fragCoord.xy / res.xy;
+                    var p = (uv - 0.5) * 2.0;
+                    p.x *= res.x / res.y;
+
+                    // Background tide: slow undulation even without face
+                    let tide = vec2<f32>(
+                        sin(uniforms.time * 0.12 + p.y * 0.3) * 0.008,
+                        cos(uniforms.time * 0.09 + p.x * 0.25) * 0.006
+                    );
+                    p = p + tide;
+
+                    let nF = i32(uniforms.seg_face);
+                    let dLo = i32(uniforms.seg_face_detail_lo);
+                    let dHi = i32(uniforms.seg_face_detail_hi);
+
+                    var acc = vec2<f32>(0.0, 0.0);
+                    var nearLoose = 0.0;
+                    var nearTight = 0.0;
+                    let kFace = 5.2 - uniforms.volatility * 0.35;
+                    let pr = uniforms.presence;
+
+                    for (var i: i32 = 0; i < 160; i = i + 1) {
+                        if (i >= nF) { break; }
+                        let s = segments[i];
+                        let m = segment_metrics(p, s.x, s.y, s.z, s.w, kFace, pr, 1.0);
+                        acc = acc + m.xy;
+                        nearLoose = max(nearLoose, m.z);
+                        let skipTight = (i >= dLo) && (i < dHi);
+                        if (!skipTight) {
+                            nearTight = max(nearTight, m.w);
+                        }
+                    }
+
+                    acc = acc * uniforms.contour_fade;
+                    nearLoose = nearLoose * uniforms.contour_fade;
+                    nearTight = nearTight * uniforms.contour_fade;
+
+                    let sb = clamp(uniforms.silhouette_blend, 0.0, 1.0);
+                    acc = acc * sb;
+                    nearLoose = nearLoose * sb;
+                    nearTight = nearTight * sb;
+
+                    let wsum = max(length(acc), 1e-6);
+                    // 向轮廓聚拢：略宽的 wPull + 更高 pullAmp；呼吸周期稍慢，流向更易读
+                    let gatherBreath = 0.68 + 0.32 * sin(uniforms.time * 0.28);
+                    let pullAmp = (0.007 + uniforms.motion * 0.010 + uniforms.presence * 0.006) * gatherBreath;
+                    let drift = (acc / wsum) * pullAmp;
+
+                    p = p + drift;
+                    let cnL = clamp(nearLoose * (1.02 + uniforms.presence * 0.16), 0.0, 1.0);
+                    let lineA = clamp(uniforms.contour_line_alpha, 0.0, 1.0);
+                    let cnT = clamp(nearTight * (1.1 + uniforms.presence * 0.12) * lineA, 0.0, 1.0);
+                    let dbg = uniforms.contour_debug;
+                    // 调试：去掉宽场 cnL 的范围光/晕染，仅保留窄带 cnT 用于细线
+                    let cnLVis = cnL * (1.0 - dbg);
+
+                    let faceIn = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
+                    let flowBoost = 0.88 * faceIn;
+                    let flowSpeedMult = mix(1.0, 1.0 + flowBoost, sb);
+                    let t = uniforms.time * (0.92 + uniforms.motion * 0.22) * flowSpeedMult;
+
+                    p = p + vec2<f32>(
+                        sin((p.y + t) * 3.4 + cnLVis * 3.7),
+                        cos((p.x - t) * 3.2 - cnLVis * 3.2)
+                    ) * (0.0024 + uniforms.motion * 0.002 + cnLVis * 0.004) * flowSpeedMult * mix(0.5, 1.0, sb);
+                    
+                    let pFbm = p + vec2<f32>(
+                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.4, 0.0)),
+                        fbm(p * 0.48 + vec2<f32>(0.0, cnLVis * 0.4))
+                    ) * (0.025 * cnLVis * flowSpeedMult * mix(0.45, 1.0, sb));
+
+                    let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
+                    let r = vec2<f32>(
+                        fbm(pFbm + 4.0 * q + vec2<f32>(1.7, 9.2) + t * 0.7),
+                        fbm(pFbm + 4.0 * q + vec2<f32>(8.3, 2.8) + t * 0.6)
+                    );
+                    var f = fbm(pFbm + 4.0 * r);
+                    f = f * (1.0 - cnLVis * 0.07) + cnLVis * 0.05 * sin(f * 12.0 + t * 0.6);
+
+                    let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
+                    let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
+                    let cyanBright = vec3<f32>(0.0, 0.75, 0.90);   
+
+                    var color = mix(indigoDeep, indigoMid, clamp(length(q), 0.0, 1.0));
+                    // 调试时勿把 cnT 并进流体底色，否则会整条轮廓带发胀变粗
+                    let cnTForFluid = cnT * (1.0 - dbg);
+                    let cyanMix = pow(f, 2.0) * 1.5 * (0.88 + cnLVis * 0.09 * mix(0.5, 1.0, sb) + cnTForFluid * 0.095 * mix(0.45, 1.0, sb));
+                    color = mix(color, cyanBright, clamp(cyanMix, 0.0, 1.0));
+                    
+                    let finalColor = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.03);
+                    var outRgb = finalColor - sin(fragCoord.y * 1.4) * 0.015;
+
+                    // Face area → intensity boost (closer = brighter contour & flow)
+                    let areaBoost = clamp(uniforms.face_area * 3.5, 0.0, 1.0);
+
+                    // Contour breathing: ~4s period pulse
+                    let breathPulse = mix(0.72, 1.0, uniforms.contour_breath);
+
+                    let lineEase = mix(0.38, 1.0, sb);
+                    var rim = pow(cnT, 1.42) * (0.09 + uniforms.presence * 0.055 + areaBoost * 0.035) * (1.0 - dbg) * lineEase;
+                    rim = rim * breathPulse;
+
+                    // Dynamic contour color: cool cyan (static) → warm gold (moving)
+                    let rimCool = vec3<f32>(0.05, 0.48, 0.62);
+                    let rimWarm = vec3<f32>(0.50, 0.35, 0.10);
+                    let rimColor = mix(rimCool, rimWarm, clamp(uniforms.motion * 2.5, 0.0, 1.0));
+                    outRgb += rimColor * rim;
+
+                    let dbgLine = pow(cnT, 5.85) * dbg * 1.02 * lineEase;
+                    outRgb += vec3<f32>(0.18, 0.98, 1.0) * dbgLine;
+
+                    // Warm tint inside face region
+                    let warmTint = vec3<f32>(0.10, 0.03, 0.06);
+                    outRgb = outRgb + warmTint * faceIn * (0.30 + areaBoost * 0.12);
+
+                    // Ripple: expanding ring from face center on presence entry
+                    if (uniforms.ripple_phase >= 0.0) {
+                        let faceC = toNdc(vec2<f32>(uniforms.face_cx, uniforms.face_cy), uniforms.res);
+                        let rDist = distance(p, faceC);
+                        let rPhase = uniforms.ripple_phase;
+                        let ringRadius = rPhase * 0.55;
+                        let ringWidth = 0.12 + rPhase * 0.06;
+                        let ringDist = abs(rDist - ringRadius);
+                        let ringIntensity = exp(-ringDist * ringDist / (ringWidth * ringWidth)) * exp(-rPhase * 1.3);
+                        outRgb += vec3<f32>(0.04, 0.28, 0.38) * ringIntensity * 0.45;
+                    }
+
+                    return vec4<f32>(outRgb, 1.0);
+                }
+            `;
+
+            // 构建管线
+            bgPipeline = webgpuDevice.createRenderPipeline({
+                layout: 'auto',
+                vertex: { module: webgpuDevice.createShaderModule({ code: bgShaderCode }), entryPoint: 'vs_main' },
+                fragment: { module: webgpuDevice.createShaderModule({ code: bgShaderCode }), entryPoint: 'fs_main', targets: [{ format }] },
+                primitive: { topology: 'triangle-list' }
+            });
+
+            bgBindGroup = webgpuDevice.createBindGroup({
+                layout: bgPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: { buffer: uniformBuffer } },
+                    { binding: 1, resource: { buffer: segmentBuffer } },
+                ]
+            });
+
+            window.addEventListener('resize', () => {
+                lastConfiguredGpuW = 0;
+                lastConfiguredGpuH = 0;
+                lastConfiguredGpuDpr = 0;
+                configureGpuCanvasResolution();
+            });
+
+            errorOverlay.classList.add('hidden');
+            
+            return true;
+        }
+
+        let lastTime = null;
+        let accumulatedPhase = 0;
+        let lastFaceCenter = null;
+        let trackedMotion = 0;
+        let trackedPresence = 0;
+        let trackedLeftPresence = 0;
+        let trackedRightPresence = 0;
+        /** 滞后于 contour_fade，削弱头手进出时引力/流速/高亮的阶跃感 */
+        let trackedSilhouetteBlend = 0;
+        let trackedFaceArea = 0;
+        let contourBreathPhase = 0;
+        let ripplePhaseTimer = -10;
+        let prevPresenceBelow = true;
+        const _uniformScratch = new Float32Array(23);
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function smoothSegmentEndpoints(segMeta) {
+            const nf = Math.floor(segMeta.byteLength / 4);
+            if (nf <= 0) return;
+            if (
+                !smoothSegPrimed
+                || (lastSmoothedSegFloats > 0 && Math.abs(nf - lastSmoothedSegFloats) > 14)
+            ) {
+                for (let i = 0; i < nf; i++) smoothSegScratch[i] = segScratch[i];
+                smoothSegPrimed = true;
+            } else {
+                const a = SEG_LINE_SMOOTH;
+                for (let i = 0; i < nf; i++) {
+                    smoothSegScratch[i] += (segScratch[i] - smoothSegScratch[i]) * a;
+                }
+            }
+            lastSmoothedSegFloats = nf;
+            const tailDecay = 0.86;
+            for (let i = nf; i < SEG_MAX * 4; i++) smoothSegScratch[i] *= tailDecay;
+        }
+
+        function getCenter(points) {
+            if (!points || !points.length) return null;
+            let sx = 0;
+            let sy = 0;
+            for (let i = 0; i < points.length; i++) {
+                sx += points[i].x;
+                sy += points[i].y;
+            }
+            return [sx / points.length, sy / points.length];
+        }
+
+        function updateTracking(dtSeconds) {
+            const faceCenter = getCenter(sharedData.face);
+
+            const hasFace = !!faceCenter;
+            const hasPose = !!(sharedData.pose && sharedData.pose.length >= 25);
+            const targetPresence = (hasFace ? 0.48 : 0.0)
+                + (hasPose ? (hasFace ? 0.12 : 0.44) : 0.0);
+            trackedPresence = lerp(trackedPresence, targetPresence, 0.07);
+            trackedLeftPresence = 0;
+            trackedRightPresence = 0;
+
+            let faceSpeed = 0;
+            if (hasFace && lastFaceCenter && dtSeconds > 0) {
+                faceSpeed = Math.hypot(faceCenter[0] - lastFaceCenter[0], faceCenter[1] - lastFaceCenter[1]) / dtSeconds;
+            }
+            sharedData.instantFaceSpeed = hasFace ? faceSpeed : 0;
+
+            const motionComposite = faceSpeed * 0.4;
+            const deadZone = 0.012;
+            const gated = Math.max(0, motionComposite - deadZone);
+            const rawMotion = Math.min(1.0, gated * 0.85);
+            trackedMotion = lerp(trackedMotion, rawMotion, 0.06);
+
+            lastFaceCenter = faceCenter || lastFaceCenter;
+
+            trackedFaceArea = lerp(trackedFaceArea, sharedData.faceArea || 0, 0.06);
+            if (trackedPresence > 0.15 && prevPresenceBelow) {
+                ripplePhaseTimer = 0;
+            }
+            prevPresenceBelow = trackedPresence < 0.05;
+        }
+
+        /** 轻量人头清晰度：不参与像素运算，仅 MediaPipe 几何 + 稳定性；轮询成本低 */
+        function computeHeadshotQuality() {
+            if (!sharedData.face || sharedData.face.length < 10) {
+                lastPollFaceCenter = null;
+                stableFramesPoll = 0;
+                return 0;
+            }
+            const c = getCenter(sharedData.face);
+            const area = sharedData.faceArea || 0;
+            let areaScore = 0;
+            if (area >= 0.08 && area <= 0.26) areaScore = 1;
+            else if (area >= 0.05 && area < 0.08) areaScore = (area - 0.05) / 0.03;
+            else if (area > 0.26 && area <= 0.38) areaScore = Math.max(0, 1 - (area - 0.26) / 0.12);
+            else if (area < 0.05) areaScore = (area / 0.05) * 0.45;
+            else areaScore = 0.22;
+
+            const spd = sharedData.instantFaceSpeed || 0;
+            const speedScore = Math.max(0, Math.min(1, 1 - spd / 1.15));
+
+            if (lastPollFaceCenter && c) {
+                const jitter = Math.hypot(c[0] - lastPollFaceCenter[0], c[1] - lastPollFaceCenter[1]);
+                if (jitter < 0.014 && spd < 0.38) stableFramesPoll++;
+                else stableFramesPoll = Math.max(0, stableFramesPoll - 3);
+            }
+            lastPollFaceCenter = c;
+
+            const stabilityScore = Math.min(1, stableFramesPoll / 16);
+            return areaScore * 0.48 + speedScore * 0.34 + stabilityScore * 0.18;
+        }
+
+        async function clearPresenceBecauseNoFace() {
+            if (presenceClearInFlight) return;
+            presenceClearInFlight = true;
+            try {
+                localStorage.removeItem('agentsart_latest_capture');
+                stableFramesPoll = 0;
+                lastPollFaceCenter = null;
+                await window.AgentsArtApi.callApiWithRetry('/clear_presence', {}, { silent: true });
+            } catch (e) {
+                console.warn('[AgentsArt] clear_presence:', e);
+            } finally {
+                presenceClearInFlight = false;
+            }
+        }
+
+        /** 随 WebGPU 帧检测：本 session 曾出现过人脸后，若持续无人则清空照片与分析 */
+        function tickNoFacePresence() {
+            const hasFace = sharedData.face && sharedData.face.length > 10;
+            if (hasFace) {
+                noFaceStreak = 0;
+                sawFaceThisSession = true;
+                return;
+            }
+            if (!sawFaceThisSession) return;
+            noFaceStreak++;
+            if (noFaceStreak === NO_FACE_FRAMES_CLEAR) {
+                sawFaceThisSession = false;
+                noFaceStreak = 0;
+                void clearPresenceBecauseNoFace();
+            }
+        }
+
+        /** 持续截图：质量达标时保存 localStorage + 限频上传服务端 */
+        async function continuousFaceCapture() {
+            if (!visionSystem || captureUploading) return;
+            const q = computeHeadshotQuality();
+            if (q < 0.4) return;
+
+            try {
+                const base64 = visionSystem.captureFrame();
+                localStorage.setItem(
+                    'agentsart_latest_capture',
+                    JSON.stringify({ image: base64, timestamp: Date.now(), quality: q })
+                );
+
+                const now = Date.now();
+                if (q < 0.48 || now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
+
+                captureUploading = true;
+                lastFaceUploadAt = now;
+                await fetch('/upload_face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64 }),
+                });
+            } catch (e) {
+                console.warn('[AgentsArt] continuousFaceCapture:', e);
+            } finally {
+                captureUploading = false;
+            }
+        }
+
+        /** 轮询服务端状态：badge、关键词闪现 */
+        async function pollServerStatus() {
+            try {
+                const r = await fetch('/get_data?t=' + Date.now(), { cache: 'no-store' });
+                if (!r.ok) return;
+                const d = await r.json();
+                applySensorPerfFromPayload(d);
+                updateIterationFaceBadge(d);
+                var newAnalysisStatus = (d && d.face_analysis_status) || 'idle';
+                if (newAnalysisStatus === 'ready' && lastKnownAnalysisStatus !== 'ready') {
+                    showKeywordFlash(d.creative_keywords);
+                }
+                lastKnownAnalysisStatus = newAnalysisStatus;
+            } catch (e) {
+                console.warn('[AgentsArt] status poll:', e);
+            }
+        }
+
+        function showKeywordFlash(keywords) {
+            var el = document.getElementById('kw-flash-overlay');
+            if (!el || !keywords || !keywords.length) return;
+            el.textContent = '';
+            var lbl = document.createElement('div');
+            lbl.className = 'kw-label';
+            lbl.textContent = '创作关键词 · Creative Keywords';
+            el.appendChild(lbl);
+            keywords.forEach(function(k) {
+                var s = document.createElement('span');
+                s.className = 'kw-tag';
+                s.textContent = k;
+                el.appendChild(s);
+            });
+            el.classList.add('visible');
+            setTimeout(function() { el.classList.remove('visible'); }, 4500);
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            if (!bgPipeline) return;
+            if (sensorTargetFps < 60) {
+                const minInt = 1000 / sensorTargetFps;
+                if (sensorFrameCapLastTime !== 0 && (time - sensorFrameCapLastTime) < minInt) return;
+                sensorFrameCapLastTime = time;
+            }
+
+            if (lastTime === null) lastTime = time;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            const dtSeconds = Math.max(0.001, Math.min(0.05, deltaTime * 0.001));
+            
+            accumulatedPhase += deltaTime * 0.001 * 0.04;
+            if (accumulatedPhase > 1e5) accumulatedPhase -= 1e5;
+            
+            const canvas = document.getElementById('gpuCanvas');
+            updateTracking(dtSeconds);
+
+            const vw = sharedData.videoRes.x || 640;
+            const vh = sharedData.videoRes.y || 480;
+            const seg = buildSegmentBuffer(
+                sharedData.face,
+                vw,
+                vh,
+                canvas.width,
+                canvas.height
+            );
+            const segTotal = seg.nFace + seg.nLeft + seg.nRight;
+            if (segTotal > 0) {
+                smoothSegmentEndpoints(seg);
+                persistScratch.set(smoothSegScratch);
+                persistNF = seg.nFace;
+                persistNL = seg.nLeft;
+                persistNR = seg.nRight;
+                persistByteLength = seg.byteLength;
+                persistDetailLo = seg.segFaceDetailLo;
+                persistDetailHi = seg.segFaceDetailHi;
+            } else {
+                smoothSegPrimed = false;
+                lastSmoothedSegFloats = 0;
+                let nz = false;
+                for (let i = 0; i < SEG_MAX * 4; i++) {
+                    smoothSegScratch[i] *= 0.88;
+                    if (Math.abs(smoothSegScratch[i]) > 1e-6) nz = true;
+                }
+                if (!nz) smoothSegScratch.fill(0);
+            }
+            trackedContourFade = lerp(trackedContourFade, segTotal > 0 ? 1.0 : 0.0, segTotal > 0 ? 0.056 : 0.026);
+            trackedSilhouetteBlend = lerp(trackedSilhouetteBlend, trackedContourFade, 0.026);
+            const lineTarget = segTotal > 0 ? 1.0 : 0.0;
+            trackedContourLineAlpha = lerp(
+                trackedContourLineAlpha,
+                lineTarget,
+                segTotal > 0 ? 0.011 : 0.0075
+            );
+
+            const useLiveSeg = segTotal > 0;
+            const holdContourGeom = useLiveSeg || trackedContourLineAlpha > 0.014;
+            const contourDead = !holdContourGeom;
+            const uNF = contourDead ? 0 : (useLiveSeg ? seg.nFace : persistNF);
+            const uNL = contourDead ? 0 : (useLiveSeg ? seg.nLeft : persistNL);
+            const uNR = contourDead ? 0 : (useLiveSeg ? seg.nRight : persistNR);
+            const uByteLen = contourDead ? 16 : (useLiveSeg ? seg.byteLength : persistByteLength);
+            const uDetailLo = contourDead ? 0 : (useLiveSeg ? seg.segFaceDetailLo : persistDetailLo);
+            const uDetailHi = contourDead ? 0 : (useLiveSeg ? seg.segFaceDetailHi : persistDetailHi);
+            const srcSeg = useLiveSeg ? smoothSegScratch : persistScratch;
+            if (!contourDead && (useLiveSeg || trackedContourFade > 0.035 || trackedContourLineAlpha > 0.014)) {
+                webgpuDevice.queue.writeBuffer(segmentBuffer, 0, srcSeg.buffer, 0, uByteLen);
+            }
+
+            contourBreathPhase += deltaTime * 0.001;
+            if (contourBreathPhase > 1e5) contourBreathPhase -= 1e5;
+            const contourBreath = 0.5 + 0.5 * Math.sin(contourBreathPhase * Math.PI * 0.5);
+            if (ripplePhaseTimer >= 0) {
+                ripplePhaseTimer += deltaTime * 0.001;
+                if (ripplePhaseTimer > 3.0) ripplePhaseTimer = -10;
+            }
+
+            let faceCU = 0.5, faceCV = 0.5;
+            if (lastFaceCenter) {
+                const fc = mapLandmarkToCanvasUV(lastFaceCenter[0], lastFaceCenter[1], vw, vh, canvas.width, canvas.height);
+                faceCU = fc[0];
+                faceCV = fc[1];
+            }
+
+            _uniformScratch[0] = canvas.width;
+            _uniformScratch[1] = canvas.height;
+            _uniformScratch[2] = accumulatedPhase;
+            _uniformScratch[3] = 0.35 + trackedMotion * 0.55;
+            _uniformScratch[4] = 0.08 + trackedMotion * 0.35;
+            _uniformScratch[5] = trackedMotion;
+            _uniformScratch[6] = trackedPresence;
+            _uniformScratch[7] = trackedLeftPresence;
+            _uniformScratch[8] = trackedRightPresence;
+            _uniformScratch[9] = uNF;
+            _uniformScratch[10] = uNL;
+            _uniformScratch[11] = uNR;
+            _uniformScratch[12] = CONTOUR_DEBUG_BRIGHT ? 1.0 : 0.0;
+            _uniformScratch[13] = uDetailLo;
+            _uniformScratch[14] = uDetailHi;
+            _uniformScratch[15] = trackedContourFade;
+            _uniformScratch[16] = trackedSilhouetteBlend;
+            _uniformScratch[17] = trackedContourLineAlpha;
+            _uniformScratch[18] = trackedFaceArea;
+            _uniformScratch[19] = contourBreath;
+            _uniformScratch[20] = ripplePhaseTimer >= 0 ? ripplePhaseTimer : -1.0;
+            _uniformScratch[21] = faceCU;
+            _uniformScratch[22] = faceCV;
+            webgpuDevice.queue.writeBuffer(uniformBuffer, 0, _uniformScratch);
+
+            // 渲染管线执行
+            const commandEncoder = webgpuDevice.createCommandEncoder();
+            const passEncoder = commandEncoder.beginRenderPass({
+                colorAttachments: [{
+                    view: webgpuContext.getCurrentTexture().createView(),
+                    clearValue: { r: 0.01, g: 0.02, b: 0.03, a: 1.0 },
+                    loadOp: 'clear', storeOp: 'store',
+                }]
+            });
+            
+            // 绘制深邃背景
+            passEncoder.setPipeline(bgPipeline);
+            passEncoder.setBindGroup(0, bgBindGroup);
+            passEncoder.draw(3, 1, 0, 0);
+
+            passEncoder.end();
+            webgpuDevice.queue.submit([commandEncoder.finish()]);
+
+            tickNoFacePresence();
+        }
+
+
+
+
+        // --- Initialization ---
+        async function init() {
+            try {
+                await syncLocalCaptureWithServerBoot();
+                await prefetchSensorClientHints();
+                const success = await initWebGPU();
+                if (success) {
+                    requestAnimationFrame(animate); // 启动 WebGPU 动画流
+                }
+                await initFaceDetection();
+                setInterval(continuousFaceCapture, CONTINUOUS_CAPTURE_MS);
+                setInterval(pollServerStatus, STATUS_POLL_MS);
+            } catch (error) {
+                console.error('Sensor init failed:', error);
+                const errorOverlay = document.getElementById('error-overlay');
+                const errorMsg = document.getElementById('error-msg');
+                errorMsg.textContent = `初始化失败: ${error?.message || String(error)}`;
+                errorOverlay.classList.remove('hidden');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

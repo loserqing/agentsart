@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGENTSART // EVOLUTION</title>
+    <meta name="description" content="AI maps void with lines. Fields generate, deconstruct. Pure geometry sculpts perception, weaving order and glitch. A sublime data poetics. | AI以线绘虚空。线场生成解构。纯粹几何塑感知，于秩序与故障间，一场数据诗学由此展开。">
+    <meta name="generator" content="AGENTSART - Iteration 6">
+    <meta name="created" content="2026-03-28 15:15">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: rgba(255, 255, 255, 0.85);
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        /* Subtle vignette effect */
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, rgba(0,0,0,0) 55%, rgba(0,0,0,0.38) 100%);
+            pointer-events: none;
+            z-index: 2;
+        }
+        .overlay {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            background: rgba(10, 10, 15, 0.58);
+            backdrop-filter: blur(24px) saturate(150%);
+            -webkit-backdrop-filter: blur(24px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.18);
+            border-left: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 12px;
+            padding: 35px;
+            font-size: 15px;
+            line-height: 1.8;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+            max-width: 520px;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(0);
+            opacity: 1;
+            animation: slideUp 1s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .overlay::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            opacity: 0.5;
+        }
+        .overlay h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 42px;
+            font-weight: normal;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+            color: #fff;
+            text-shadow: 0 2px 14px rgba(0,0,0,0.6);
+        }
+        .overlay-kicker {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(212, 175, 55, 0.85);
+            margin: 0 0 8px 0;
+        }
+        .overlay-concept {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            line-height: 1.65;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.91);
+            margin: 0 0 18px 0;
+            max-height: 11em;
+            overflow-y: auto;
+            padding-right: 6px;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.85);
+        }
+        .overlay .desc {
+            font-weight: 400;
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.88);
+            text-shadow: 0 2px 6px rgba(0,0,0,0.88);
+        }
+        .meta {
+            opacity: 0.6;
+            font-size: 11px;
+            margin-top: 25px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 15px;
+            font-weight: 600;
+            color: #A8C2B5;
+        }
+        .iteration-badge {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            background: rgba(10, 10, 15, 0.5);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            padding: 12px 24px;
+            border-radius: 30px;
+            color: #d4af37;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 15px rgba(212, 175, 55, 0.1);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 1s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .iteration-badge .iter-num {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 600;
+            font-style: italic;
+        }
+        .iteration-badge .iter-style {
+            opacity: 0.8;
+            font-size: 13px;
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 12px;
+            border-left: 1px solid rgba(212, 175, 55, 0.3);
+        }
+        .loading {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #050505;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #eaeaea;
+            font-size: 16px;
+            z-index: 1000;
+            letter-spacing: 2px;
+            font-weight: 300;
+            transition: opacity 1s ease;
+        }
+        .loading--boot .loading-primary { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.14em; }
+        .loading--boot .loading-sub {
+            margin: 0;
+            font-size: 11px;
+            opacity: 0.52;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            font-weight: 400;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #d4af37;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        /* Page entrance & exit transitions */
+        body { animation: pageEnter 2s ease-out; }
+        @keyframes pageEnter { 0% { opacity: 0; } 100% { opacity: 1; } }
+        #arrival-flash {
+            position: fixed; inset: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(212,175,55,0.12), transparent 65%);
+            z-index: 998; pointer-events: none;
+            animation: arrivalPulse 3s ease-out forwards;
+        }
+        @keyframes arrivalPulse {
+            0% { opacity: 1; transform: scale(0.95); }
+            50% { opacity: 0.5; transform: scale(1.02); }
+            100% { opacity: 0; transform: scale(1); }
+        }
+        #page-transition-out {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            opacity: 0; pointer-events: none; transition: opacity 0.9s ease-in;
+        }
+        #page-transition-out.active { opacity: 1; }
+        .overlay-keywords {
+            display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px 0;
+        }
+        .overlay-keywords:empty { display: none; }
+        .overlay-keywords .kw-tag {
+            font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.08em;
+            padding: 2px 8px; border: 1px solid rgba(212, 175, 55, 0.35);
+            border-radius: 3px; color: rgba(212, 175, 55, 0.8);
+        }
+    </style>
+    <!-- 引入 Three.js (使用稳定的 r128 版本，避免 404 错误) -->
+    <script src="/js/lib/three.min.js"></script>
+</head>
+<body>
+    <div class="loading loading--boot" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-primary">Compiling scene…</div>
+        <div class="loading-sub">正在编译场景 · Shaders & WebGL</div>
+    </div>
+    <div id="canvas-container"></div>
+    <div id="arrival-flash"></div>
+    <div id="page-transition-out"></div>
+    
+    <div class="iteration-badge">
+        <span class="iter-num">Iter 6</span>
+        <span class="iter-style" title="Deep-sea cool tones, signal ripples | 深海冷调，信号波纹">Deep-sea cool tones, signal ripples | 深海冷调，信号波纹</span>
+    </div>
+    
+    <div class="overlay">
+        <h1>Line Field | 线场</h1>
+        <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
+        <div class="overlay-keywords"><span class="kw-tag">数据内化</span><span class="kw-tag">微帧披露</span><span class="kw-tag">回路疲怠</span></div>
+        <div class="overlay-concept">AI降临，是无形智能在虚空中绘制的宏大蓝图。作品以不断生成与解构的**线场**为核心，展现智能如何以纯粹的几何律动，在秩序与瞬时解构之间，编织新的感知结构，构成一幅冷静而崇高的“数据诗学”画卷。</div>
+        <div class="desc">Lines define void. Logic breaks, then builds. | 线定义虚空。逻辑破立。</div>
+        <div class="meta">
+            AGENTSART SYSTEM<br>
+            Autonomous Rendering<br>
+            2026-03-28 15:15
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh：与页内迭代号比较；state.json 禁用缓存；支持服务端重置后迭代号回绕
+        (function setupEvolutionAutoRefresh() {
+           function pageIterationFromDom() {
+                const gen = document.querySelector('meta[name="generator"]');
+                if (gen) {
+                    const m = (gen.getAttribute('content') || '').match(/Iteration\\s+(\\d+)/i);
+                    if (m) return parseInt(m[1], 10);
+                }
+                const badge = document.querySelector('.iteration-badge .iter-num');
+                if (badge) {
+                    const m = (badge.textContent || '').match(/(\\d+)/);
+                    if (m) return parseInt(m[1], 10);
+                }
+                return 6;
+            }
+            const PAGE_ITER = pageIterationFromDom();
+            let lastKnownRun = null;
+            let inFlight = false;
+            function parseStateIteration(raw) {
+                const n = Math.trunc(Number(raw));
+                return Number.isFinite(n) ? n : null;
+            }
+            function reloadPage() {
+                var pto = document.getElementById('page-transition-out');
+                if (pto) {
+                    pto.classList.add('active');
+                    setTimeout(function() {
+                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                    }, 900);
+                } else {
+                    window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                }
+            }
+            async function checkNewVersion() {
+                if (inFlight) return;
+                inFlight = true;
+                try {
+                    const url = new URL('state.json', window.location.href);
+                    url.searchParams.set('t', String(Date.now()));
+                    const res = await fetch(url.href, { cache: 'no-store' });
+                    if (!res.ok) return;
+                    const state = await res.json();
+                    const srvIter = parseStateIteration(state.iteration);
+                    const run = typeof state.last_run === 'string' ? state.last_run : '';
+                    if (srvIter !== null && PAGE_ITER !== null && srvIter !== PAGE_ITER) {
+                        console.log('Evolution: iteration mismatch, reloading...');
+                        reloadPage();
+                        return;
+                    }
+                    if (srvIter !== null && PAGE_ITER === null && srvIter >= 0) {
+                        console.log('Evolution: sync page from state...');
+                        reloadPage();
+                        return;
+                    }
+                    if (srvIter !== null && PAGE_ITER !== null && srvIter === PAGE_ITER && lastKnownRun != null && run && run !== lastKnownRun) {
+                        console.log('Evolution: state.json updated, reloading...');
+                        reloadPage();
+                        return;
+                    }
+                    if (run) lastKnownRun = run;
+                } catch (e) { }
+                finally { inFlight = false; }
+            }
+            setInterval(checkNewVersion, 2200);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) void checkNewVersion();
+            });
+            void checkNewVersion();
+        })();
+
+        // Global error capture for syntax errors
+        window.addEventListener('error', function(e) {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.width = 'auto';
+                loading.style.height = 'auto';
+                loading.style.top = '20px';
+                loading.style.left = '50%';
+                loading.style.transform = 'translateX(-50%)';
+                loading.style.background = 'rgba(200, 0, 0, 0.8)';
+                loading.style.padding = '10px 20px';
+                loading.style.borderRadius = '8px';
+                loading.style.border = '1px solid #ff6b6b';
+                loading.innerHTML = '⚠️ Code Error (Auto-refresh active).<br>' + (e.message || '');
+            }
+            if (!window.fallbackRendered) {
+                renderFallback();
+                window.fallbackRendered = true;
+                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
+                if (errCount < 2) {
+                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
+                    setTimeout(function() {
+                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                    }, 8000);
+                }
+            }
+        });
+
+        window.addEventListener('load', function() {
+            sessionStorage.removeItem('agentsart_err_reload');
+        });
+
+        function renderFallback() {
+            const container = document.getElementById('canvas-container');
+            container.innerHTML = '';
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
+            const material = new THREE.MeshNormalMaterial({ wireframe: true, transparent: true, opacity: 0.3 });
+            const torusKnot = new THREE.Mesh(geometry, material);
+            scene.add(torusKnot);
+
+            camera.position.z = 30;
+            function animate() {
+                requestAnimationFrame(animate);
+                torusKnot.rotation.x += 0.005;
+                torusKnot.rotation.y += 0.005;
+                renderer.render(scene, camera);
+            }
+            animate();
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        window.addEventListener('load', () => {
+            const loading = document.getElementById('loading');
+            if (loading && loading.classList.contains('loading--boot')) {
+                loading.style.opacity = '0';
+                setTimeout(() => { loading.style.display = 'none'; }, 1000);
+            }
+        });
+    </script>
+    <script>
+        // Core Three.js render code
+        try {
+// Global variables for Three.js scene elements and animation
+let scene, camera, renderer;
+let lineSegmentsNetwork;
+let ambientLight, pointLight1, pointLight2;
+const clock = new THREE.Clock(); // For managing time-based animations
+
+// Store original vertex positions and individual phase offsets for animation
+let originalVertexPositions = [];
+let vertexAnimationOffsets = [];
+let vertexColorsArray; // Store reference to the Float32Array for colors
+
+// --- Pseudo-noise function (sine-based) ---
+// Combines multiple sine waves for a more organic, non-uniform value.
+// This function helps simulate Perlin-like noise without external libraries.
+function getPseudoNoise(x, y, z, time, frequencyScale, amplitudeScale) {
+    let noiseVal = 0;
+    noiseVal += Math.sin(x * frequencyScale + time * 0.5);
+    noiseVal += Math.sin(y * frequencyScale * 0.8 + time * 0.7);
+    noiseVal += Math.sin(z * frequencyScale * 1.2 + time * 0.9);
+    noiseVal += Math.sin((x + y + z) * frequencyScale * 0.5 + time * 1.1) * 0.5;
+    return (noiseVal / 3.5) * amplitudeScale; // Normalize and scale
+}
+
+// --- Initialization Function ---
+function init() {
+    // 1. Scene Setup
+    scene = new THREE.Scene();
+    // Add subtle fog to enhance depth and mood, creating a deep-sea atmosphere
+    scene.fog = new THREE.FogExp2(0x0a0a1a, 0.004); // Dark charcoal-indigo fog
+
+    // 2. Camera Setup
+    camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // Initial camera position, it will slowly orbit later
+    camera.position.set(0, 0, 100);
+
+    // 3. Renderer Setup
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    // Strict requirement: Tone mapping for better visual quality and sufficient brightness
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.6; // Increased exposure for sufficient brightness
+    // Insert the renderer's canvas into the specified container
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // 4. Lighting Setup (Deep-sea cool tones palette)
+    ambientLight = new THREE.AmbientLight(0x1a1a2a, 0.4); // Subtle dark blue-gray ambient light (intensity > 0.3)
+    scene.add(ambientLight);
+
+    pointLight1 = new THREE.PointLight(0x00ffff, 1.2, 150); // Bright cyan light (intensity > 0.8)
+    pointLight1.position.set(60, 60, 60);
+    scene.add(pointLight1);
+
+    pointLight2 = new THREE.PointLight(0x00aaff, 1.0, 120); // Bright blue light (intensity > 0.8)
+    pointLight2.position.set(-60, -60, -60);
+    scene.add(pointLight2);
+
+    // 5. Background - Deep charcoal to indigo gradient space
+    // HSL Lightness (L) is 0.08 (8%), ensuring it's not pure black.
+    scene.background = new THREE.Color().setHSL(0.65, 0.3, 0.08); // Initial dark charcoal-indigo
+
+    // 6. LineSegments: Dynamic Network Grid
+    const nodeCount = 200; // Number of "connection points" for the network (Adjusted for performance, was 300)
+    const connectionRadius = 30; // Maximum distance for nodes to form a connection
+    const volumeSize = 100; // Size of the cube volume where nodes are distributed
+
+    const nodes = []; // Array to store THREE.Vector3 positions for each node
+    for (let i = 0; i < nodeCount; i++) {
+        // Randomly distribute nodes within a cube volume
+        nodes.push(new THREE.Vector3(
+            (Math.random() - 0.5) * volumeSize,
+            (Math.random() - 0.5) * volumeSize,
+            (Math.random() - 0.5) * volumeSize
+        ));
+    }
+
+    const lineVertices = [];
+    const lineColors = []; // Will store R, G, B, Alpha for each vertex
+    const tempColor = new THREE.Color();
+
+    // Iterate through nodes to create connections (line segments)
+    for (let i = 0; i < nodeCount; i++) {
+        const nodeA = nodes[i];
+        for (let j = i + 1; j < nodeCount; j++) { // Compare each node with subsequent nodes to avoid duplicates
+            const nodeB = nodes[j];
+            if (nodeA.distanceTo(nodeB) < connectionRadius) {
+                // If nodes are within connection radius, add a line segment
+                lineVertices.push(nodeA.x, nodeA.y, nodeA.z);
+                lineVertices.push(nodeB.x, nodeB.y, nodeB.z);
+
+                // Store original positions for vertex animation (data pulse)
+                originalVertexPositions.push(nodeA.x, nodeA.y, nodeA.z);
+                originalVertexPositions.push(nodeB.x, nodeB.y, nodeB.z);
+                // Assign unique phase offsets for asynchronous vertex animation
+                vertexAnimationOffsets.push(Math.random() * Math.PI * 2);
+                vertexAnimationOffsets.push(Math.random() * Math.PI * 2);
+
+                // Assign a base color for the segment, will be dynamically modulated for "signal ripples"
+                tempColor.setHSL(0.55 + Math.random() * 0.1, 0.7 + Math.random() * 0.2, 0.6 + Math.random() * 0.2); // Blue-cyan tones
+                // Initialize with 0 alpha (invisible) to simulate lines "appearing"
+                lineColors.push(tempColor.r, tempColor.g, tempColor.b, 0.0);
+                lineColors.push(tempColor.r, tempColor.g, tempColor.b, 0.0);
+            }
+        }
+    }
+
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
+    vertexColorsArray = new Float32Array(lineColors); // Convert to Float32Array and store reference
+    lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColorsArray, 4)); // Use 4 components (R, G, B, A)
+
+    const lineMaterial = new THREE.LineBasicMaterial({
+        vertexColors: true, // Crucial for using the R, G, B, A attributes
+        transparent: true,
+        blending: THREE.AdditiveBlending, // Creates a nice glowing effect for the lines
+        // linewidth: 1 // Note: linewidth is often fixed to 1 pixel in WebGL and not reliably animatable
+    });
+
+    lineSegmentsNetwork = new THREE.LineSegments(lineGeometry, lineMaterial);
+    scene.add(lineSegmentsNetwork);
+
+    // 7. Window Resize Listener: Adjust camera and renderer on window resize
+    window.addEventListener('resize', onWindowResize);
+}
+
+// --- Animation Loop Function ---
+function animate() {
+    requestAnimationFrame(animate); // Request next animation frame
+
+    const time = clock.getElapsedTime(); // Total time elapsed since clock started
+    const delta = clock.getDelta(); // Time elapsed since last frame
+
+    // --- Fast Layer Animation (2-8 seconds cycles) ---
+
+    // LineSegments: Vertex Pulsation ("data pulse")
+    const positions = lineSegmentsNetwork.geometry.attributes.position.array;
+    const vertexCount = positions.length / 3;
+    const pulseMagnitude = 0.5; // How much vertices move from their original position
+    const pulseSpeed = 4; // Speed of the vertex pulsation
+
+    for (let i = 0; i < vertexCount; i++) {
+        const i3 = i * 3;
+        const ox = originalVertexPositions[i3];
+        const oy = originalVertexPositions[i3 + 1];
+        const oz = originalVertexPositions[i3 + 2];
+
+        // Apply a sine wave displacement, individually offset by a unique phase
+        const displacement = Math.sin(time * pulseSpeed + vertexAnimationOffsets[i]) * pulseMagnitude;
+
+        // Displace vertices along their original vector from the center, normalized
+        const currentVertex = new THREE.Vector3(ox, oy, oz);
+        currentVertex.normalize().multiplyScalar(displacement); // Calculate displacement vector
+
+        positions[i3] = ox + currentVertex.x;
+        positions[i3 + 1] = oy + currentVertex.y;
+        positions[i3 + 2] = oz + currentVertex.z;
+    }
+    lineSegmentsNetwork.geometry.attributes.position.needsUpdate = true; // Tell Three.js to update vertex positions on GPU
+
+    // LineSegments: Dynamic Alpha for "signal ripples" / "appearance/disappearance"
+    const colors = lineSegmentsNetwork.geometry.attributes.color.array; // This is the Float32Array reference
+    const opacityCycleSpeed = 2.5; // How fast lines appear/disappear globally
+    // Controls overall "density" of active lines, oscillates between ~0.0 and ~1.0
+    const lineActivateThreshold = 0.5 + 0.5 * Math.sin(time * 0.8);
+
+    for (let i = 0; i < vertexCount; i += 2) { // Process each line segment (composed of 2 vertices)
+        // Calculate the midpoint of the current segment for noise sampling
+        const midX = (positions[i * 3] + positions[(i + 1) * 3]) / 2;
+        const midY = (positions[i * 3 + 1] + positions[(i + 1) * 3 + 1]) / 2;
+        const midZ = (positions[i * 3 + 2] + positions[(i + 1) * 3 + 2]) / 2;
+
+        // Use pseudo-noise to determine the "activation" state of this segment
+        const activationValue = getPseudoNoise(midX, midY, midZ, time * opacityCycleSpeed, 0.05, 1.0);
+
+        // Modulate alpha based on the noise value and the global activation threshold
+        // Lines "appear" when their activationValue is significantly above the threshold
+        let alpha = Math.max(0, (activationValue - lineActivateThreshold) * 3);
+        alpha = Math.min(alpha, 0.9); // Cap max alpha for a subtle, ethereal glow, avoiding full opacity
+
+        // Apply the calculated alpha to both vertices of the current segment
+        colors[i * 4 + 3] = alpha; // Alpha component for the first vertex of the segment
+        colors[(i + 1) * 4 + 3] = alpha; // Alpha component for the second vertex of the segment
+    }
+    lineSegmentsNetwork.geometry.attributes.color.needsUpdate = true; // Tell Three.js to update vertex colors on GPU
+
+
+    // --- Slow Layer Animation (20-60 seconds cycles) ---
+
+    // Camera: Slow orbital drift and subtle vertical motion
+    const cameraOrbitRadius = 120;
+    const cameraOrbitSpeed = 0.015; // Slower speed for a longer cycle (approx. 400s per orbit)
+    camera.position.x = cameraOrbitRadius * Math.sin(time * cameraOrbitSpeed * 0.5);
+    camera.position.z = cameraOrbitRadius * Math.cos(time * cameraOrbitSpeed * 0.5);
+    camera.position.y = 10 + 20 * Math.sin(time * cameraOrbitSpeed * 0.8); // Subtle up/down motion
+    camera.lookAt(scene.position); // Always point the camera to the center of the scene
+
+    // Global Fog Color/Density: Slow "breath" effect
+    const fogDensityPulse = 0.003 + 0.001 * Math.sin(time * 0.07); // Very slow density pulse (approx. 90s cycle)
+    scene.fog.density = fogDensityPulse;
+    // Slow color shift for fog to enhance deep-sea coolness
+    scene.fog.color.setHSL(0.65 + 0.03 * Math.sin(time * 0.04), 0.3, 0.08);
+
+    // Point Lights: Slow movement and color temperature shift
+    const lightOrbitSpeed = 0.025; // Speed for light orbit (approx. 250s per orbit)
+    pointLight1.position.x = 80 * Math.sin(time * lightOrbitSpeed);
+    pointLight1.position.y = 80 * Math.cos(time * lightOrbitSpeed * 0.8);
+    pointLight1.position.z = 80 * Math.sin(time * lightOrbitSpeed * 1.2);
+    // Slow color shift for pointLight1 (from cyan towards a slightly warmer blue)
+    pointLight1.color.setHSL(0.55 + 0.05 * Math.sin(time * 0.05), 0.9, 0.8);
+
+    pointLight2.position.x = -80 * Math.cos(time * lightOrbitSpeed * 0.7);
+    pointLight2.position.y = -80 * Math.sin(time * lightOrbitSpeed * 1.1);
+    pointLight2.position.z = -80 * Math.cos(time * lightOrbitSpeed * 0.9);
+    // Slow color shift for pointLight2 (from blue towards a more purple hue)
+    pointLight2.color.setHSL(0.75 + 0.05 * Math.cos(time * 0.04), 0.9, 0.7);
+
+    // Global background color: Slow subtle shift to maintain deep-sea cool tones
+    scene.background.setHSL(0.65 + 0.02 * Math.sin(time * 0.03), 0.3, 0.08);
+
+    renderer.render(scene, camera); // Render the scene with the updated camera and objects
+}
+
+// --- Window Resize Handler Function ---
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
+    camera.updateProjectionMatrix(); // Recalculate projection matrix
+    renderer.setSize(window.innerWidth, window.innerHeight); // Update renderer size
+}
+
+// --- Start the Three.js experience ---
+init();
+animate();
+        } catch(err) {
+            console.error("Three.js Runtime Error:", err);
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'block';
+                loading.style.width = 'auto';
+                loading.style.height = 'auto';
+                loading.style.top = '20px';
+                loading.style.left = '50%';
+                loading.style.transform = 'translateX(-50%)';
+                loading.style.background = 'rgba(200, 0, 0, 0.8)';
+                loading.style.padding = '10px 20px';
+                loading.style.borderRadius = '8px';
+                loading.style.border = '1px solid #ff6b6b';
+                loading.innerHTML = '⚠️ Runtime Error (Auto-refresh active).<br>' + err.message;
+            }
+            if (!window.fallbackRendered) {
+                renderFallback();
+                window.fallbackRendered = true;
+                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
+                if (errCount < 2) {
+                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
+                    setTimeout(function() {
+                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                    }, 8000);
+                }
+            }
+        }
+    </script>
+    <script>
+        (function microDrift() {
+            var driftT = 0;
+            function tick() {
+                driftT += 0.0006;
+                var c = document.querySelector('#canvas-container canvas');
+                if (!c) { requestAnimationFrame(tick); return; }
+                var hue = Math.sin(driftT) * 4;
+                var bright = 1.06 + Math.sin(driftT * 0.7) * 0.03;
+                var sat = 1.04 + Math.sin(driftT * 0.4) * 0.05;
+                c.style.filter = 'hue-rotate(' + hue.toFixed(2) + 'deg) brightness(' + bright.toFixed(4) + ') saturate(' + sat.toFixed(3) + ')';
+                requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        })();
+    </script>
+</body>
+</html>
