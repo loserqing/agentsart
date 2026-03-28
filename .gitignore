@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# CrewAI（本仓库已不用；若本地再跑 crewai 也不会误提交）
+.crewai_storage/
+
 # Runtime artifacts (regenerated on each server start)
 iterations/
 state.json
