@@ -7,6 +7,7 @@ import hashlib
 import base64
 import binascii
 import asyncio
+import signal
 import threading
 import shutil
 from datetime import datetime, timedelta
@@ -15,6 +16,8 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from pydantic import BaseModel
 import uvicorn
 from google import genai
@@ -108,6 +111,44 @@ def _on_orchestrator_event(agent: str, phase: str, iteration: int, summary: str 
 # Shutdown event for graceful termination
 shutdown_event = threading.Event()
 
+
+async def _sleep_interruptible(total_sec: float, step: float = 0.05) -> None:
+    """可被 shutdown_event 打断的 sleep，避免 SSE 在 asyncio.sleep(0.8) 上卡满 graceful 窗口。"""
+    elapsed = 0.0
+    while elapsed < total_sec:
+        if shutdown_event.is_set():
+            return
+        chunk = min(step, total_sec - elapsed)
+        await asyncio.sleep(chunk)
+        elapsed += chunk
+
+
+class CacheControlMiddleware:
+    """纯 ASGI：只改 response headers，不包装 body_iterator（避免 StreamingResponse 在 Ctrl+C 时被 BaseHTTPMiddleware 取消并报错）。"""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "") or ""
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                if (
+                    path.startswith("/api")
+                    or path.endswith(".html")
+                    or path in ("/state.json", "/iteration_log.json", "/events")
+                ):
+                    headers = MutableHeaders(scope=message)
+                    headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
 # Lifespan handler for graceful shutdown
 
 @asynccontextmanager
@@ -172,18 +213,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.middleware("http")
-async def add_no_cache_header(request: Request, call_next):
-    response = await call_next(request)
-    path = request.url.path
-    if (
-        path.startswith("/api")
-        or path.endswith(".html")
-        or path in ("/state.json", "/iteration_log.json")
-    ):
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    return response
+app.add_middleware(CacheControlMiddleware)
 
 # --- Models ---
 class ProcessFaceRequest(BaseModel):
@@ -616,7 +646,7 @@ async def agent_events(request: Request):
                 for evt in new:
                     last_id = evt["id"]
                     yield f"id: {evt['id']}\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.8)
+                await _sleep_interruptible(0.8)
         except (asyncio.CancelledError, GeneratorExit):
             pass
 
@@ -694,6 +724,37 @@ if __name__ == "__main__":
             return all(x not in msg for x in ["/get_data", "/state.json", "/iteration_log.json", "/upload_face", "/favicon.ico", "/evolution.html", "/sensor.html", "/dashboard.html", "/index.html", "/events"])
     logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
+    def _exc_graph_has_shutdown_noise(exc: BaseException | None) -> bool:
+        """遍历 __cause__ / __context__ 全链；force_exit 时多为 CancelledError + KeyboardInterrupt 嵌套。"""
+
+        def walk(e: BaseException | None, seen: set[int]) -> bool:
+            if e is None or id(e) in seen:
+                return False
+            seen.add(id(e))
+            if isinstance(e, asyncio.CancelledError | KeyboardInterrupt):
+                return True
+            return walk(e.__cause__, seen) or walk(e.__context__, seen)
+
+        return walk(exc, set())
+
+    class _ShutdownNoiseLoggingFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if "timeout graceful shutdown exceeded" in msg:
+                return False
+            if record.exc_info and record.exc_info[1] is not None:
+                if _exc_graph_has_shutdown_noise(record.exc_info[1]):
+                    return False
+            # 兜底：部分路径把整段 Traceback 写进 message
+            if record.levelno >= logging.ERROR and "Traceback" in msg:
+                if "asyncio.exceptions.CancelledError" in msg or "CancelledError" in msg:
+                    return False
+                if "KeyboardInterrupt" in msg:
+                    return False
+            return True
+
+    logging.getLogger("uvicorn.error").addFilter(_ShutdownNoiseLoggingFilter())
+
     # 启动时自动打开浏览器（守护线程，避免拖到进程无法退出）
     if not args.no_browser:
         _open_browser_timer = threading.Timer(
@@ -706,7 +767,7 @@ if __name__ == "__main__":
     print("="*50)
     print("🚀 AgentsArt 统一服务启动中...")
     print(f"👉 访问地址: http://localhost:{args.port}")
-    print("⌨️  Ctrl+C：尽快停止（约 2s 内结束等待）；仍卡住时再按一次强制退出。")
+    print("⌨️  Ctrl+C：立即退出进程（编排线程为守护线程，随进程结束）。")
     print("="*50)
 
     # 使用自定义日志配置以加快响应
@@ -731,11 +792,14 @@ if __name__ == "__main__":
     }
 
     class AgentsArtServer(uvicorn.Server):
-        """在 uvicorn 收到 SIGINT/SIGTERM 的第一时间通知编排循环，避免“全卡住停不下来”。"""
+        """SIGINT：立刻 force_exit（等同连按两次 Ctrl+C），避免等满 graceful 窗口；SIGTERM 仍走较短优雅关闭。"""
 
         def handle_exit(self, sig, frame=None):
             shutdown_event.set()
             super().handle_exit(sig, frame)
+            if sig == signal.SIGINT:
+                self.force_exit = True
+                print("\n🛑 收到 Ctrl+C，正在退出…", flush=True)
 
     config = uvicorn.Config(
         "main:app",
@@ -746,9 +810,15 @@ if __name__ == "__main__":
         timeout_keep_alive=2,
         timeout_graceful_shutdown=2,
     )
+    import sys
+
     try:
         AgentsArtServer(config).run()
     except KeyboardInterrupt:
-        shutdown_event.set()
+        pass
+    except SystemExit as e:
+        if e.code not in (0, None):
+            raise
     finally:
         shutdown_event.set()
+    sys.exit(0)

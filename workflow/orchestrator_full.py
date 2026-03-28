@@ -343,9 +343,9 @@ class FullOrchestrator:
         iteration = state.get("iteration", 0)
         if state.get("regen_attempts", 0) < 1:
             reason = ""
-            if score < 7.5:
-                reason = f"评分 {score}/10 < 7.5"
-            elif not publish_ready and score < 8.5:
+            if score < 7.0:
+                reason = f"评分 {score}/10 < 7.0"
+            elif not publish_ready and score < 8.0:
                 reason = f"评分 {score}/10 · publish_ready=false"
             if reason:
                 print(f"   🔄 {reason}，触发 Builder 重新生成")
@@ -718,7 +718,11 @@ class FullOrchestrator:
 - 9-10 分：形式前卫、动画丰富、色彩动态、多层视觉、即可展陈
 - 7-8 分：概念好但实现有缺陷（如动画太慢、单色、单层几何体）
 - 5-6 分：套路化 demo 或实现严重偏离概念
-- **publish_ready=true 仅在代码实际实现了多层、动态、可感知动画时才给**
+
+**publish_ready（放宽，勿过严）**：
+- `true`：**总分 ≥ 8.0** 且作品**整体可展陈**——概念与形式基本咬合、不是明显套模板 demo 即可；**不要求**同时满足「多层几何 + 动态色彩 + 强动画」三件套，有**任一侧**（独特形式 / 可见动效 / 光影或色彩层次）站得住即可给 `true`。
+- **总分 ≥ 8.5** 时，除非有**硬伤**（严重跑题、纯占位几何、几乎静止且无设计感），否则**应倾向 `true`**。
+- `false`：总分 **< 7.5**，或 **7.5–7.9** 且实现明显拖后腿（套路、静止、与概念脱节）；**不要**只因「还能再 polish」就判 `false`。
 
 请输出 JSON 格式：
 ```json

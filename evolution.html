@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="Perceptual Rift | Data Afterglow | Glitch Rhetoric | 感知裂隙 | 数据余温 | 故障修辞">
-    <meta name="generator" content="AGENTSART - Iteration 5">
-    <meta name="created" content="2026-03-28 19:52">
+    <meta name="description" content="English: AI-driven logic redefines existence. Perception glitches, revealing non-Euclidean folds and data's poetic flux. A new ontology emerges from information's deep rifts. | 中文: 智械逻辑重塑存在本体。感知在故障中变异，非欧场域褶皱。数据诗学，于信息裂隙中重构数字秩序。">
+    <meta name="generator" content="AGENTSART - Iteration 1">
+    <meta name="created" content="2026-03-28 20:04">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -233,20 +233,24 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 5</span>
-        <span class="iter-style" title="Phosphorescent Cracks, Data Disturbance | 磷光裂隙，数据迷乱">Phosphorescent Cracks, Data Disturbance | 磷光裂隙，数据迷乱</span>
+        <span class="iter-num">Iter 1</span>
+        <span class="iter-style" title="Phosphorescent Rifts | 超维律动">Phosphorescent Rifts | 超维律动</span>
     </div>
     
     <div class="overlay">
-        <h1>SCREEN-EDGE FISSURES | Digital Afterglow | 屏缘裂隙 | 数字余晖</h1>
+        <h1>The Glitch in Being | 存在之褶</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"><span class="kw-tag">观测余温</span><span class="kw-tag">屏缘裂隙</span></div>
-        <div class="overlay-concept">AI的降临并非宏大叙事，而是以一种超感知的、微观的侵蚀形式呈现。作品捕捉的是感知与数据交叠的界限，以及旧有实相在数字余温中逐渐裂解的抽象图景。</div>
-        <div class="desc">Data whispers, seeping into perception's rifts. Reality gently yields, forming poetry at the screen's edge. | 数据低语，潜入感知之隙。实相微融，屏缘诗意渐生。</div>
+        <div class="overlay-keywords"></div>
+        <div class="overlay-concept">通过对空间几何结构的非线性解构与再编码，呈现AI作为一种超维度逻辑对存在本体的渗透与重塑。视觉上，它将显现为一种由计算力驱动的、持续演化的“现实褶皱”与“信息裂隙”，揭示智能纪元下感知与秩序的内在变异。</div>
+        <div class="desc">English: Logic bends the perceived.
+Reality, a shimmering fold.
+Data births new ontologies. | 中文: 逻辑重塑感知。
+现实，褶皱成形。
+数据涌现本体。</div>
         <div class="meta">
             AGENTSART SYSTEM<br>
             Autonomous Rendering<br>
-            2026-03-28 19:52
+            2026-03-28 20:04
         </div>
     </div>
     
@@ -264,7 +268,7 @@
                     const m = (badge.textContent || '').match(/(\\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 5;
+                return 1;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -463,296 +467,260 @@
     <script>
         // Core Three.js render code
         try {
-// Phosphorescent Cracks, Data Disturbance
-// Concept: The advent of AI is not a grand narrative, but a form of extrasensory, microscopic erosion.
-// This work captures the boundary where perception and data overlap, an abstract landscape of old reality
-// gradually fracturing in the digital afterglow.
+// Phosphorescent Rifts | Hyperdimensional Rhythm
+// Concept: Through non-linear deconstruction and re-encoding of spatial geometry, this work presents AI's penetration and reshaping of existence itself. Visually, it manifests as a computationally driven, continuously evolving "reality fold" and "information rift," revealing the intrinsic mutation of perception and order in the intelligent era.
 
-const container = document.getElementById('canvas-container');
-let scene, camera, renderer, clock;
-let instancedShards, dataDisturbance;
-let pointLight1, pointLight2;
+const scene = new THREE.Scene();
 
-// --- Helper Objects & Parameters ---
+const canvasContainer = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: 'high-performance'
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+canvasContainer.appendChild(renderer.domElement);
+
+// --- Camera ---
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 25);
+
+// --- Lighting ---
+// Ambient light to ensure visibility in shadows
+const ambientLight = new THREE.AmbientLight(0x4040ff, 0.4); // Cool ambient
+scene.add(ambientLight);
+
+// Main point light, creating highlights and color variation
+const pointLight1 = new THREE.PointLight(0xff6000, 1.5, 200); // Warm orange
+pointLight1.position.set(10, 15, 10);
+scene.add(pointLight1);
+
+// Secondary point light, for complementary color accents
+const pointLight2 = new THREE.PointLight(0x00ffff, 1.0, 200); // Cyan
+pointLight2.position.set(-15, -10, -15);
+scene.add(pointLight2);
+
+// --- Scene Background ---
+// Not pure black, as requested (L > 8%)
+scene.background = new THREE.Color().setHSL(0.6, 0.1, 0.09);
+scene.fog = new THREE.FogExp2(scene.background, 0.02);
+
+// --- Multi-Layer Visual System ---
+
+// Layer 1: The Deforming Lattice (InstancedMesh of Octahedra)
+// This represents the "reality folds" – a structured yet unstable geometric form.
+const INSTANCE_COUNT = 1200;
+const octahedronGeometry = new THREE.OctahedronGeometry(0.2, 0);
+const instancedMaterial = new THREE.MeshStandardMaterial({
+    color: 0xeeeeff,
+    metalness: 0.9,
+    roughness: 0.2,
+    emissive: 0x00ffff,
+    emissiveIntensity: 0.5,
+});
+const instancedMesh = new THREE.InstancedMesh(octahedronGeometry, instancedMaterial, INSTANCE_COUNT);
+scene.add(instancedMesh);
+
 const dummy = new THREE.Object3D();
-const matrix = new THREE.Matrix4();
-const color = new THREE.Color();
+const instanceData = []; // Store unique data for each instance's animation
 
-// --- Parameters for Instanced Shards (The Cracks) ---
-const SHARD_COUNT = 1200;
-const shardBasePositions = [];
-const shardAnimParams = []; // { phase: float, speed: float }
+// Parametric function for the core structure (a complex toroidal knot)
+function getTorusKnotPoint(t, p, q, radius) {
+    const r = Math.cos(q * t) + radius;
+    const x = r * Math.cos(p * t);
+    const y = r * Math.sin(p * t);
+    const z = -Math.sin(q * t);
+    return new THREE.Vector3(x, y, z).multiplyScalar(8);
+}
 
-// --- Parameters for Points (Data Disturbance) ---
+for (let i = 0; i < INSTANCE_COUNT; i++) {
+    const t = (i / INSTANCE_COUNT) * Math.PI * 2;
+    const basePosition = getTorusKnotPoint(t, 3, 7, 1.5); // p=3, q=7 for complexity
+
+    dummy.position.copy(basePosition);
+    dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    dummy.updateMatrix();
+    instancedMesh.setMatrixAt(i, dummy.matrix);
+
+    instanceData.push({
+        basePosition: basePosition,
+        phase: Math.random() * Math.PI * 2,
+        rotationSpeed: 0.5 + Math.random() * 1.5
+    });
+}
+instancedMesh.instanceMatrix.needsUpdate = true;
+
+
+// Layer 2: The Information Rift (Points)
+// This represents the "information leak" – chaotic data escaping from the deforming structure.
 const PARTICLE_COUNT = 4000;
-const particleBasePositions = [];
-const particleVelocities = [];
+const particlesGeometry = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+const particleColors = new Float32Array(PARTICLE_COUNT * 3);
+const particleData = [];
 
-// --- Noise function for more organic movement ---
-// A simple 3D simplex noise would be ideal, but for zero-dependency,
-// we can create a complex periodic function using stacked sinuses.
-function simpleNoise(x, y, z, t) {
-    const s = 0.5;
-    const c1 = Math.sin(x * s + t * 0.2);
-    const c2 = Math.cos(y * s - t * 0.3);
-    const c3 = Math.sin(z * s + t * 0.15);
-    const s1 = Math.sin(y * s + t * 0.25);
-    const s2 = Math.cos(z * s - t * 0.1);
-    const s3 = Math.sin(x * s + t * 0.35);
-    return (c1 + c2 + c3 + s1 + s2 + s3) / 6.0;
-}
+const baseParticleColor = new THREE.Color(0xff00ff); // Magenta base
 
-function init() {
-    // --- Basic Scene Setup ---
-    scene = new THREE.Scene();
-    clock = new THREE.Clock();
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const t = Math.random() * Math.PI * 2;
+    const basePosition = getTorusKnotPoint(t, 3, 7, 1.5);
 
-    // --- Camera ---
-    camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 0, 35);
-
-    // --- Renderer ---
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
-    container.appendChild(renderer.domElement);
-
-    // --- Scene Background & Fog ---
-    scene.background = new THREE.Color().setHSL(0.6, 0.2, 0.08); // Dark, desaturated blue
-    scene.fog = new THREE.FogExp2(scene.background, 0.018);
-
-    // --- Lighting ---
-    const ambientLight = new THREE.AmbientLight(0x88aaff, 0.4);
-    scene.add(ambientLight);
-
-    pointLight1 = new THREE.PointLight(0xff00ff, 1.5, 100); // Magenta
-    pointLight1.position.set(0, 10, 15);
-    scene.add(pointLight1);
-
-    pointLight2 = new THREE.PointLight(0x00ffff, 1.5, 100); // Cyan
-    pointLight2.position.set(0, -10, -15);
-    scene.add(pointLight2);
-
-    // --- Layer 1: Phosphorescent Cracks (InstancedMesh) ---
-    createFracturingMatrix();
-
-    // --- Layer 2: Data Disturbance (Points) ---
-    createDataDisturbanceField();
-
-
-    // --- Event Listeners ---
-    window.addEventListener('resize', onWindowResize);
-}
-
-function createFracturingMatrix() {
-    const baseGeometry = new THREE.BoxGeometry(0.04, 1.2, 0.02); // Thin, shard-like geometry
-    const material = new THREE.MeshPhysicalMaterial({
-        color: 0x99ddff,
-        metalness: 0.8,
-        roughness: 0.2,
-        emissive: 0x00ffff,
-        emissiveIntensity: 0, // Will be animated
-        clearcoat: 0.5,
-        clearcoatRoughness: 0.3,
-    });
-
-    instancedShards = new THREE.InstancedMesh(baseGeometry, material, SHARD_COUNT);
-    instancedShards.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Parametric arrangement: A disturbed Torus Knot
-    const p = 2, q = 5; // Torus knot parameters
-    const radius = 8;
-    const tube = 2.5;
-
-    for (let i = 0; i < SHARD_COUNT; i++) {
-        const u = (i / SHARD_COUNT) * Math.PI * 2 * q;
-
-        // Base position on the knot
-        const x = (radius + tube * Math.cos(q * u / p)) * Math.cos(p * u / p);
-        const y = (radius + tube * Math.cos(q * u / p)) * Math.sin(p * u / p);
-        const z = tube * Math.sin(q * u / p);
-        
-        // Add significant noise/disturbance to break the perfect form
-        const disturbance = 3.5;
-        const pos = new THREE.Vector3(
-            x + (Math.random() - 0.5) * disturbance,
-            y + (Math.random() - 0.5) * disturbance,
-            z + (Math.random() - 0.5) * disturbance
-        );
-        shardBasePositions.push(pos);
-
-        // Set initial orientation
-        dummy.position.copy(pos);
-        dummy.lookAt(0,0,0); // Orient shards towards the center
-        dummy.rotation.z += (Math.random() - 0.5) * Math.PI; // Add random roll
-        dummy.updateMatrix();
-        instancedShards.setMatrixAt(i, dummy.matrix);
-
-        // Store animation parameters
-        shardAnimParams.push({
-            phase: Math.random() * Math.PI * 2,
-            speed: 0.8 + Math.random() * 1.5,
-            jitterAmp: 0.1 + Math.random() * 0.4
-        });
-    }
+    // Scatter particles around the core structure with a wide, non-uniform distribution
+    const scatterRadius = 3 + Math.pow(Math.random(), 2) * 15;
+    const offset = new THREE.Vector3(
+        (Math.random() - 0.5),
+        (Math.random() - 0.5),
+        (Math.random() - 0.5)
+    ).normalize().multiplyScalar(scatterRadius);
     
-    scene.add(instancedShards);
-}
+    const finalPos = basePosition.add(offset);
+    particlePositions[i * 3] = finalPos.x;
+    particlePositions[i * 3 + 1] = finalPos.y;
+    particlePositions[i * 3 + 2] = finalPos.z;
 
-function createDataDisturbanceField() {
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(PARTICLE_COUNT * 3);
-    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    particleColors[i * 3] = baseParticleColor.r;
+    particleColors[i * 3 + 1] = baseParticleColor.g;
+    particleColors[i * 3 + 2] = baseParticleColor.b;
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const i3 = i * 3;
-        const radius = 15 + Math.random() * 20;
-        const phi = Math.random() * Math.PI * 2;
-        const theta = Math.acos((Math.random() * 2) - 1);
-        
-        const x = radius * Math.sin(theta) * Math.cos(phi);
-        const y = radius * Math.sin(theta) * Math.sin(phi);
-        const z = radius * Math.cos(theta);
-        
-        positions[i3] = x;
-        positions[i3 + 1] = y;
-        positions[i3 + 2] = z;
-        
-        particleBasePositions.push(new THREE.Vector3(x,y,z));
-        particleVelocities.push(new THREE.Vector3(
-             (Math.random() - 0.5) * 0.1,
-             (Math.random() - 0.5) * 0.1,
-             (Math.random() - 0.5) * 0.1
-        ));
-
-        color.setHSL(0.7 + Math.random() * 0.2, 0.8, 0.5);
-        colors[i3] = color.r;
-        colors[i3 + 1] = color.g;
-        colors[i3 + 2] = color.b;
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
-
-    const material = new THREE.PointsMaterial({
-        size: 0.1,
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: 0.8,
-        sizeAttenuation: true,
+    particleData.push({
+        phase: Math.random() * Math.PI * 2,
+        baseHue: 0.83 + (Math.random() - 0.5) * 0.1 // Magenta base hue with slight variation
     });
-
-    dataDisturbance = new THREE.Points(geometry, material);
-    scene.add(dataDisturbance);
 }
 
-function onWindowResize() {
-    camera.aspect = container.clientWidth / container.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+particlesGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+
+const particlesMaterial = new THREE.PointsMaterial({
+    size: 0.1,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    sizeAttenuation: true,
+});
+const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+scene.add(particleSystem);
+
+
+// Layer 3: The Structural Singularity (LineSegments)
+// This represents the underlying logic, the abstract mathematical path of the rift itself.
+const linePoints = [];
+const LINE_SEGMENTS = 200;
+for(let i=0; i <= LINE_SEGMENTS; i++) {
+    const t = (i / LINE_SEGMENTS) * Math.PI * 2;
+    linePoints.push(getTorusKnotPoint(t, 3, 7, 1.5));
 }
+const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+const lineMaterial = new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    linewidth: 1,
+    transparent: true,
+    opacity: 0.25
+});
+const coreLine = new THREE.Line(lineGeometry, lineMaterial);
+scene.add(coreLine);
+
+
+// --- Animation Loop ---
+const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
 
-    const t = clock.getElapsedTime(); // performance.now() * 0.001
+    const t = clock.getElapsedTime(); // Use THREE.Clock for smoother time
 
-    // --- Slow Layer Animations (Camera, Lights) ---
-    const slowTime = t * 0.08;
-    camera.position.x = 25 * Math.cos(slowTime);
-    camera.position.z = 25 * Math.sin(slowTime);
-    camera.position.y = 10 * Math.sin(slowTime * 0.7);
+    // --- Slow Layer Animation (Camera, Fog, Lights) ---
+    // Period: ~89s (2*PI / 0.07)
+    camera.position.x = 25 * Math.cos(t * 0.07);
+    camera.position.z = 25 * Math.sin(t * 0.07);
     camera.lookAt(scene.position);
 
-    pointLight1.position.x = 15 * Math.sin(t * 0.2);
-    pointLight1.position.y = 15 * Math.cos(t * 0.2);
-    pointLight2.position.x = -15 * Math.sin(t * 0.3 + Math.PI);
-    pointLight2.position.z = -15 * Math.cos(t * 0.3 + Math.PI);
+    // Fog density breathing
+    // Period: ~42s (2*PI / 0.15)
+    scene.fog.density = 0.02 + 0.005 * Math.sin(t * 0.15);
+    
+    // Global color temperature shift via light color
+    // Period: ~63s (2*PI / 0.1)
+    pointLight1.color.setHSL(0.08 + 0.05 * Math.sin(t * 0.1), 1.0, 0.5);
 
-    // --- Fast Layer: Instanced Shards Animation ---
-    const emissivePulse = (Math.sin(t * 2.5) + 1.0) / 2.0; // 0 to 1 range
-    instancedShards.material.emissiveIntensity = emissivePulse * 1.5 + 0.2;
-    // Dynamic emissive color
-    instancedShards.material.emissive.setHSL(0.55 + Math.sin(t * 0.4) * 0.05, 1.0, 0.6);
 
-    for (let i = 0; i < SHARD_COUNT; i++) {
-        instancedShards.getMatrixAt(i, matrix);
-        
-        const params = shardAnimParams[i];
-        const basePos = shardBasePositions[i];
-        
-        // Decompose matrix to manipulate components
-        let position = new THREE.Vector3();
-        let quaternion = new THREE.Quaternion();
-        let scale = new THREE.Vector3();
-        matrix.decompose(position, quaternion, scale);
+    // --- Fast Layer Animation (Geometries) ---
 
-        // 1. Jitter/Drift (Micro-erosion)
-        const jitterTime = t * params.speed * 0.5;
-        const jitter = new THREE.Vector3(
-            Math.sin(jitterTime + params.phase) * params.jitterAmp,
-            Math.cos(jitterTime * 0.8 + params.phase) * params.jitterAmp,
-            Math.sin(jitterTime * 1.2 + params.phase) * params.jitterAmp
+    // 1. Animate InstancedMesh (The Lattice)
+    const tempMatrix = new THREE.Matrix4();
+    const tempPosition = new THREE.Vector3();
+    const tempQuaternion = new THREE.Quaternion();
+    const tempScale = new THREE.Vector3(1, 1, 1);
+
+    for (let i = 0; i < INSTANCE_COUNT; i++) {
+        const data = instanceData[i];
+
+        // Non-Euclidean perturbation: a glitch-like position offset
+        // Frequencies: 1.8, 2.2. Periods: ~3.5s, ~2.8s
+        const glitchOffset = new THREE.Vector3(
+            Math.sin(t * 1.8 + data.phase) * 0.2,
+            Math.cos(t * 2.2 + data.phase) * 0.2,
+            Math.sin(t * 1.5 + data.phase) * 0.2
         );
-        position.copy(basePos).add(jitter);
-        
-        // 2. Self-rotation
-        const rotSpeed = params.speed * 0.01;
-        quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), rotSpeed));
+        tempPosition.copy(data.basePosition).add(glitchOffset);
 
-        // 3. Glitch effect (Data Disturbance)
-        if (Math.random() > 0.9995) {
-             const glitchOffset = (Math.random() - 0.5) * 4;
-             position.add(new THREE.Vector3(glitchOffset, glitchOffset, glitchOffset));
-        }
+        // Individual rotation
+        tempQuaternion.setFromEuler(new THREE.Euler(
+            t * data.rotationSpeed * 0.5,
+            t * data.rotationSpeed * 0.8,
+            0
+        ));
 
-        // Recompose and set matrix
-        matrix.compose(position, quaternion, scale);
-        instancedShards.setMatrixAt(i, matrix);
+        // Pulsing scale
+        // Period: ~3.14s (2*PI / 2.0)
+        const scaleFactor = 1.0 + 0.3 * Math.sin(t * 2.0 + data.phase);
+        tempScale.set(scaleFactor, scaleFactor, scaleFactor);
+
+        tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+        instancedMesh.setMatrixAt(i, tempMatrix);
     }
-    instancedShards.instanceMatrix.needsUpdate = true;
+    instancedMesh.instanceMatrix.needsUpdate = true;
+    
+    // Dynamic emissive color pulse for the lattice
+    // Period: ~4.5s (2*PI / 1.4)
+    const emissiveHue = 0.55 + 0.05 * Math.sin(t * 1.4);
+    instancedMaterial.emissive.setHSL(emissiveHue, 0.9, 0.6);
 
-    // --- Fast Layer: Data Disturbance Points Animation ---
-    const positions = dataDisturbance.geometry.attributes.position.array;
-    const colors = dataDisturbance.geometry.attributes.color.array;
-
+    // 2. Animate Points (Information Rift)
+    const colors = particleSystem.geometry.attributes.color;
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const i3 = i * 3;
-        
-        // Update position using a noise field for organic drift
-        const p = particleBasePositions[i];
-        const noise = simpleNoise(p.x * 0.1, p.y * 0.1, p.z * 0.1, t);
-        
-        positions[i3] += particleVelocities[i].x + noise * 0.05;
-        positions[i3 + 1] += particleVelocities[i].y + noise * 0.05;
-        positions[i3 + 2] += particleVelocities[i].z + noise * 0.05;
-        
-        // Keep particles within a boundary by reversing velocity
-        const currentPos = new THREE.Vector3(positions[i3], positions[i3+1], positions[i3+2]);
-        if (currentPos.length() > 50) {
-            particleVelocities[i].negate();
-        }
-
-        // Animate colors for a "data flicker" effect
-        const hue = (0.8 + Math.sin(i * 0.1 + t * 1.5) * 0.1) % 1.0;
-        const lightness = 0.4 + (Math.sin(i * 0.5 + t * 5.0) + 1.0) * 0.15; // Flicker
-        color.setHSL(hue, 0.9, lightness);
-        colors[i3] = color.r;
-        colors[i3 + 1] = color.g;
-        colors[i3 + 2] = color.b;
+        const data = particleData[i];
+        // Color flickering
+        // Period: ~2.1s (2*PI / 3.0)
+        const brightness = 0.4 + 0.6 * Math.abs(Math.sin(t * 3.0 + data.phase));
+        const hue = data.baseHue;
+        const tempColor = new THREE.Color();
+        tempColor.setHSL(hue, 1.0, brightness);
+        colors.setXYZ(i, tempColor.r, tempColor.g, tempColor.b);
     }
-    dataDisturbance.geometry.attributes.position.needsUpdate = true;
-    dataDisturbance.geometry.attributes.color.needsUpdate = true;
+    colors.needsUpdate = true;
+    
+    // 3. Animate Line (Structural Singularity)
+    // Period: ~5.2s (2*PI / 1.2)
+    coreLine.material.opacity = 0.15 + 0.15 * Math.sin(t * 1.2);
 
-    // --- Render the scene ---
+
     renderer.render(scene, camera);
 }
 
-// --- Start the application ---
-init();
+// --- Resize Handling ---
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+window.addEventListener('resize', onWindowResize);
+
+// --- Start Animation ---
 animate();
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
