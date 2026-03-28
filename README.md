@@ -8,6 +8,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com)
 [![Gemini AI](https://img.shields.io/badge/Gemini-AI-4285F4.svg)](https://ai.google.dev)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agent-FF5733.svg)](https://langchain-ai.github.io/langgraph)
 
 </div>
 
@@ -21,7 +22,7 @@
 
 - 🎯 **实时面部捕捉** - MediaPipe 全身姿态追踪（面部、手部、虹膜）
 - 🧠 **AI 侧写引擎** - Gemini 驱动的「福尔摩斯式」面部微特征解构
-- 🤖 **多智能体编排** - CrewAI 智能体协作生成艺术迭代
+- 🤖 **多智能体编排** - LangGraph StateGraph 智能体协作生成艺术迭代
 - 🎨 **迭代进化** - 每次分析驱动下一次艺术创作
 - 📊 **可视化仪表盘** - 实时查看分析结果与生成历史
 
@@ -40,8 +41,8 @@
 │         │                  │                      │          │
 │         ▼                  ▼                      ▼          │
 │  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │ MediaPipe   │    │  CrewAI      │    │  Iteration    │  │
-│  │ Vision      │    │  Orchestrator│    │  Storage      │  │
+│  │ MediaPipe   │    │  LangGraph   │    │  Iteration    │  │
+│  │ Vision      │    │  StateGraph  │    │  Storage      │  │
 │  └─────────────┘    └──────────────┘    └───────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -135,10 +136,11 @@ agentsart/
 
 ### 2. 多智能体编排器 (`workflow/orchestrator_full.py`)
 
-基于 CrewAI 的智能体协作系统：
-- **分析智能体** - 解析面部特征
-- **艺术智能体** - 生成艺术概念
-- **执行智能体** - 驱动渲染引擎
+基于 **LangGraph StateGraph** 的智能体协作系统：
+- **状态管理** - TypedDict 定义迭代状态
+- **节点编排** - START → 分析 → 生成 → 渲染 → END
+- **条件分支** - 根据分析结果动态调整生成策略
+- **代码生成** - 输出 Three.js (WebGL) 生成艺术代码
 
 ### 3. 视觉捕捉 (`js/vision_capture.js`)
 
@@ -240,7 +242,8 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 - [Google Gemini AI](https://ai.google.dev) - AI 分析引擎
 - [MediaPipe](https://mediapipe.dev) - 视觉追踪
-- [CrewAI](https://crewai.com) - 智能体编排
+- [LangGraph](https://langchain-ai.github.io/langgraph) - 智能体编排
+- [LangChain](https://python.langchain.com) - LLM 应用框架
 - [FastAPI](https://fastapi.tiangolo.com) - Web 框架
 
 ---
