@@ -1113,7 +1113,28 @@
             collabResizeTimer = setTimeout(() => trimCollabTurns(getCollabMaxTurns()), 120);
         });
 
+        let _sse = null;
+        function connectSSE() {
+            if (_sse) { _sse.close(); _sse = null; }
+            _sse = new EventSource('/events');
+            _sse.onmessage = function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    if (evt.phase === 'start') {
+                        updateAgentStatus(evt.agent, 'Thinking...');
+                    } else if (evt.phase === 'done') {
+                        const card = document.getElementById('agent-' + evt.agent);
+                        if (card) {
+                            card.classList.add('active');
+                            card.querySelector('.status-text').textContent = 'Done';
+                        }
+                    }
+                } catch(err) {}
+            };
+        }
+
         window.addEventListener('load', async () => {
+            connectSSE();
             await pollData();
             await loadAnalysisData();
             setInterval(renderCollabNextRoundHint, 1000);

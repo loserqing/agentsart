@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
+import subprocess
+import threading
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -84,6 +86,8 @@ def _normalize_model_name(raw: str) -> str:
     return name
 
 
+_log_lock = threading.Lock()
+
 # --------------- LangGraph state schema ---------------
 
 class PipelineState(TypedDict, total=False):
@@ -100,12 +104,15 @@ class PipelineState(TypedDict, total=False):
     builder: dict
     reviewer: dict
     critic: dict
+    syntax_valid: bool
+    syntax_error: str
+    fix_attempts: int
 
 
 # --------------- orchestrator class ---------------
 
 class FullOrchestrator:
-    def __init__(self, project_dir: str = None, model=None):
+    def __init__(self, project_dir: str = None, model=None, on_event=None):
         self.project_dir = Path(project_dir) if project_dir else Path(__file__).parent.parent
         raw_model = model or os.getenv("DEFAULT_MODEL", "gemini/gemini-2.0-flash")
         self.model_name = _normalize_model_name(raw_model)
@@ -122,7 +129,12 @@ class FullOrchestrator:
         _tpl_path = Path(__file__).parent / "evolution_template.html"
         self.html_template = _tpl_path.read_text(encoding="utf-8")
 
+        self._on_event = on_event
         self._graph = self._build_graph()
+
+    def _emit(self, agent: str, phase: str, iteration: int, summary: str = ""):
+        if self._on_event:
+            self._on_event(agent, phase, iteration, summary)
 
     # ---- graph construction ----
 
@@ -133,13 +145,18 @@ class FullOrchestrator:
         g.add_node("visual", self._node_visual)
         g.add_node("builder", self._node_builder)
         g.add_node("reviewer", self._node_reviewer)
+        g.add_node("syntax_guard", self._node_syntax_guard)
+        g.add_node("code_fixer", self._node_code_fixer)
         g.add_node("critic", self._node_critic)
         g.add_edge(START, "director")
         g.add_edge("director", "narrative")
-        g.add_edge("narrative", "visual")
+        g.add_edge("director", "visual")
+        g.add_edge("narrative", "builder")
         g.add_edge("visual", "builder")
         g.add_edge("builder", "reviewer")
-        g.add_edge("reviewer", "critic")
+        g.add_edge("reviewer", "syntax_guard")
+        g.add_conditional_edges("syntax_guard", self._route_after_syntax)
+        g.add_edge("code_fixer", "syntax_guard")
         g.add_edge("critic", END)
         return g.compile()
 
@@ -192,6 +209,123 @@ class FullOrchestrator:
                 return content
         return ""
 
+    # ---- JS syntax validation + conditional fix loop ----
+
+    def _validate_js(self, code: str) -> tuple:
+        """Return (is_valid, error_message). Uses Node.js when available, falls back to bracket matching."""
+        if not code or len(code.strip()) < 80:
+            return False, "Code is too short or empty"
+
+        try:
+            wrapper = f"try{{new Function({json.dumps(code)})}}catch(e){{process.stderr.write(e.message);process.exit(1)}}"
+            r = subprocess.run(
+                ["node", "-e", wrapper],
+                capture_output=True, text=True, timeout=8,
+            )
+            if r.returncode == 0:
+                return True, ""
+            return False, (r.stderr.strip()[:200] or "Unknown syntax error")
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+
+        stack: list[str] = []
+        pairs = {")": "(", "}": "{", "]": "["}
+        i, n = 0, len(code)
+        while i < n:
+            ch = code[i]
+            if ch == "/" and i + 1 < n and code[i + 1] == "/":
+                while i < n and code[i] != "\n":
+                    i += 1
+                continue
+            if ch == "/" and i + 1 < n and code[i + 1] == "*":
+                i += 2
+                while i < n - 1 and not (code[i] == "*" and code[i + 1] == "/"):
+                    i += 1
+                i += 2
+                continue
+            if ch in ('"', "'", "`"):
+                q = ch
+                i += 1
+                while i < n:
+                    if code[i] == "\\" and i + 1 < n:
+                        i += 2
+                        continue
+                    if code[i] == q:
+                        break
+                    i += 1
+                i += 1
+                continue
+            if ch in "({[":
+                stack.append(ch)
+            elif ch in ")}]":
+                if not stack:
+                    return False, f"Unexpected '{ch}' near char {i}"
+                if stack[-1] != pairs[ch]:
+                    return False, f"Mismatched '{ch}' near char {i}"
+                stack.pop()
+            i += 1
+
+        if stack:
+            return False, f"Unclosed brackets: {len(stack)} remaining ({''.join(stack[-8:])})"
+        return True, ""
+
+    def _node_syntax_guard(self, state: PipelineState) -> dict:
+        code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
+        valid, err = self._validate_js(code)
+        if valid:
+            print("   ✅ 语法校验通过")
+        else:
+            print(f"   ⚠️ 语法校验失败: {err[:100]}")
+        return {"syntax_valid": valid, "syntax_error": err if not valid else ""}
+
+    def _route_after_syntax(self, state: PipelineState) -> str:
+        if state.get("syntax_valid", False):
+            return "critic"
+        if state.get("fix_attempts", 0) >= 2:
+            print("   ⚠️ 修复次数已达上限，使用当前代码继续")
+            return "critic"
+        return "code_fixer"
+
+    def _node_code_fixer(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        attempt = state.get("fix_attempts", 0) + 1
+        print(f"🔧 代码语法修复（第 {attempt} 次）...")
+        self._emit("reviewer", "start", iteration)
+
+        code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
+        error = state.get("syntax_error", "")
+
+        prompt = f"""以下 Three.js 代码存在语法错误，请修复并输出完整可运行代码。
+
+【语法错误信息】
+{error}
+
+【原始代码】
+```javascript
+{code}
+```
+
+【修复要求】
+1. 最可能的问题是代码被截断，缺少闭合的大括号/小括号/分号。检查并补全所有未闭合的 {{ }}, ( ), 函数定义与 animate 循环。
+2. 确保代码末尾有完整的 `animate()` 调用和 `window.addEventListener('resize', ...)` 监听。
+3. 不要删减核心功能逻辑，只做语法修复和补全。
+4. 输出完整代码，用 ```javascript 和 ``` 包裹。"""
+
+        raw = self._llm_call(prompt, code_mode=True)
+        fixed = self._extract_js_code(raw) or code
+
+        result = dict(state.get("reviewer") or state.get("builder") or {})
+        result["threejs_code"] = fixed
+        print(f"   ✓ 修复代码 ({len(fixed)} 字符)")
+        self._emit("reviewer", "done", iteration, f"Syntax fix #{attempt}")
+
+        self._update_log(
+            iteration,
+            state.get("director"), state.get("narrative"), state.get("visual"),
+            state.get("builder"), result,
+        )
+        return {"reviewer": result, "fix_attempts": attempt}
+
     # ---- graph nodes (each receives full state, returns partial update) ----
 
     def _node_director(self, state: PipelineState) -> dict:
@@ -201,6 +335,7 @@ class FullOrchestrator:
         prev_concept = state.get("prev_concept", "")
 
         print("🎬 [1/6] 创意总监...")
+        self._emit("director", "start", iteration)
 
         if face_influence:
             influence_prompt = f"""
@@ -255,6 +390,7 @@ class FullOrchestrator:
         result = self._parse_json(self._llm_call(prompt))
         print(f"   ✓ 概念：{result.get('concept', '')[:50]}...")
         self._update_log(iteration, result)
+        self._emit("director", "done", iteration, result.get('concept', '')[:80])
         return {"director": result}
 
     def _node_narrative(self, state: PipelineState) -> dict:
@@ -262,6 +398,7 @@ class FullOrchestrator:
         result1 = state.get("director", {})
 
         print("📖 [2/6] 叙事策划...")
+        self._emit("narrative", "start", iteration)
 
         prompt = f"""基于以下创意方向构建叙事（偏**展陈大屏**：标题远看可读，小字有诗意）：
 创意概念：{result1.get('concept', '')}
@@ -279,6 +416,7 @@ class FullOrchestrator:
         result = self._parse_json(self._llm_call(prompt))
         print(f"   ✓ 标题：{result.get('title', '')}")
         self._update_log(iteration, result1, result)
+        self._emit("narrative", "done", iteration, result.get('title', '')[:80])
         return {"narrative": result}
 
     def _node_visual(self, state: PipelineState) -> dict:
@@ -289,6 +427,7 @@ class FullOrchestrator:
         prev_visual = state.get("prev_visual", "")
 
         print("🎨 [3/6] 视觉设计师...")
+        self._emit("visual", "start", iteration)
 
         if use_chain:
             visual_style_line = """2. 要求：表现出极高的视觉复杂度与**可辨识的计算美学**。**不要**每轮停在「旋转粒子球+一两个多面体」的舒适区；每轮在下列方向中做**显性换轨**（仍遵守后续 Builder 的单场景性能上限）：
@@ -320,7 +459,7 @@ class FullOrchestrator:
         prompt = f"""设计视觉语言。
 
 创意概念：{result1.get('concept', '')}
-叙事：{result2.get('title', '')}
+叙事：{result2.get('title') or result1.get('theme_focus', '')}
 
 【视觉进化要求】
 1. 警告：绝对禁止出现任何现实世界的背景、环境贴图（如公园、房间等真实 HDRI）或具象物体！背景应为算法生成的抽象空间或**富有色彩层次的渐变/纯色**——**不要总是使用接近纯黑的背景**，允许深蓝、靛紫、暗绿、深红、炭灰等**有明度的暗色调**，让前景元素有足够的对比度和辨识度。
@@ -339,6 +478,7 @@ class FullOrchestrator:
         result = self._parse_json(self._llm_call(prompt))
         print(f"   ✓ 风格：{result.get('visual_style_summary', '')}")
         self._update_log(iteration, result1, result2, result)
+        self._emit("visual", "done", iteration, result.get('visual_style_summary', '')[:80])
         return {"visual": result}
 
     def _node_builder(self, state: PipelineState) -> dict:
@@ -350,6 +490,7 @@ class FullOrchestrator:
         prev_code = state.get("prev_code", "")
 
         print("💻 [4/6] 技术实现...")
+        self._emit("builder", "start", iteration)
 
         prompt = f"""编写基于 Three.js 的生成艺术代码。
 
@@ -390,6 +531,7 @@ class FullOrchestrator:
         result = {"threejs_code": extracted_code}
         print(f"   ✓ 代码已生成 ({len(extracted_code)} 字符)")
         self._update_log(iteration, state.get("director"), state.get("narrative"), result3, result)
+        self._emit("builder", "done", iteration, f"Code generated ({len(extracted_code)} chars)")
         return {"builder": result}
 
     def _node_reviewer(self, state: PipelineState) -> dict:
@@ -397,6 +539,7 @@ class FullOrchestrator:
         result4 = state.get("builder", {})
 
         print("🔬 [5/6] 代码审查...")
+        self._emit("reviewer", "start", iteration)
 
         prompt = f"""严格审查并修复前一位技术工程师生成的 Three.js 代码，必须保证生成的 WebGL 作品完美可运行，绝不崩溃！
 请务必排查以下常见致命错误：
@@ -438,6 +581,7 @@ class FullOrchestrator:
 
         result = {"threejs_code": fixed_code, "review_comments": comments}
         print("   ✓ 审查完毕")
+        self._emit("reviewer", "done", iteration, "Code review complete")
         self._update_log(
             iteration,
             state.get("director"), state.get("narrative"), state.get("visual"),
@@ -451,6 +595,7 @@ class FullOrchestrator:
         result3 = state.get("visual", {})
 
         print("🔍 [6/6] 艺术评审...")
+        self._emit("critic", "start", iteration)
 
         prompt = f"""评审本次迭代作品（请关注**形式是否独特**、是否摆脱俗套 demo 感，而非一味堆粒子数）。
 
@@ -484,6 +629,9 @@ class FullOrchestrator:
             state.get("director"), state.get("narrative"), state.get("visual"),
             state.get("builder"), state.get("reviewer"), result,
         )
+        conclusion = (result.get('conclusion') or '')[:80]
+        score = result.get('total_score', 'N/A')
+        self._emit("critic", "done", iteration, f"Score: {score}/10 — {conclusion}")
         return {"critic": result}
 
     # ---- public entry point ----
@@ -540,6 +688,9 @@ class FullOrchestrator:
             "builder": {},
             "reviewer": {},
             "critic": {},
+            "syntax_valid": False,
+            "syntax_error": "",
+            "fix_attempts": 0,
         }
 
         final = self._graph.invoke(initial_state)
@@ -670,22 +821,23 @@ window.addEventListener('resize', () => {
         if result6:
             log_entry["critic"] = result6
 
-        logs = []
-        if log_file.exists():
-            with open(log_file, "r", encoding="utf-8") as f:
-                try:
-                    logs = json.load(f)
-                except Exception:
-                    pass
+        with _log_lock:
+            logs = []
+            if log_file.exists():
+                with open(log_file, "r", encoding="utf-8") as f:
+                    try:
+                        logs = json.load(f)
+                    except Exception:
+                        pass
 
-        idx = next((i for i, log in enumerate(logs) if log.get("iteration") == iteration), -1)
-        if idx >= 0:
-            logs[idx] = log_entry
-        else:
-            logs.append(log_entry)
+            idx = next((i for i, log in enumerate(logs) if log.get("iteration") == iteration), -1)
+            if idx >= 0:
+                logs[idx].update(log_entry)
+            else:
+                logs.append(log_entry)
 
-        logs = logs[-1:] if logs else []
-        _atomic_write_json(log_file, logs)
+            logs = logs[-1:] if logs else []
+            _atomic_write_json(log_file, logs)
 
 
 if __name__ == "__main__":

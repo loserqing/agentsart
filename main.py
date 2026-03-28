@@ -6,12 +6,13 @@ import time
 import hashlib
 import base64
 import binascii
+import asyncio
 import threading
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -76,6 +77,32 @@ def _state_update(**kwargs):
     """Thread-safe batch update of GLOBAL_STATE fields."""
     with _state_lock:
         GLOBAL_STATE.update(kwargs)
+
+
+# --------------- SSE event stream ---------------
+_agent_events: list[dict] = []
+_agent_events_lock = threading.Lock()
+_agent_event_counter = 0
+
+
+def push_agent_event(agent: str, phase: str, iteration: int, summary: str = ""):
+    global _agent_event_counter
+    with _agent_events_lock:
+        _agent_event_counter += 1
+        _agent_events.append({
+            "id": _agent_event_counter,
+            "agent": agent,
+            "phase": phase,
+            "iteration": iteration,
+            "summary": summary,
+            "ts": time.time(),
+        })
+        if len(_agent_events) > 100:
+            _agent_events[:] = _agent_events[-60:]
+
+
+def _on_orchestrator_event(agent: str, phase: str, iteration: int, summary: str = ""):
+    push_agent_event(agent, phase, iteration, summary)
 
 
 # Shutdown event for graceful termination
@@ -169,7 +196,7 @@ def orchestrator_loop():
     print("="*60)
 
     model_name = os.getenv("DEFAULT_MODEL", "gemini/gemini-2.0-flash")
-    orchestrator = FullOrchestrator(model=model_name)
+    orchestrator = FullOrchestrator(model=model_name, on_event=_on_orchestrator_event)
     print(f"📎 编排器 LLM：{model_name}")
 
     iteration_gap_default = float(os.getenv("AGENTSART_ITERATION_INTERVAL_SEC", "300"))
@@ -556,6 +583,32 @@ def build_sensor_client_hints() -> dict:
     return hints
 
 
+@app.get("/events", tags=["SSE"])
+async def agent_events(request: Request):
+    """SSE: real-time agent phase push (start / done)."""
+    last_event_id = request.headers.get("last-event-id")
+    last_id = int(last_event_id) if last_event_id else 0
+
+    async def generate():
+        nonlocal last_id
+        try:
+            while True:
+                with _agent_events_lock:
+                    new = [e for e in _agent_events if e["id"] > last_id]
+                for evt in new:
+                    last_id = evt["id"]
+                    yield f"id: {evt['id']}\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.8)
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/get_data", tags=["State"])
 async def get_data():
     payload = _state_snapshot()
@@ -620,7 +673,7 @@ if __name__ == "__main__":
     class EndpointFilter(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.getMessage()
-            return all(x not in msg for x in ["/get_data", "/state.json", "/iteration_log.json", "/upload_face", "/favicon.ico", "/evolution.html", "/sensor.html", "/dashboard.html", "/index.html"])
+            return all(x not in msg for x in ["/get_data", "/state.json", "/iteration_log.json", "/upload_face", "/favicon.ico", "/evolution.html", "/sensor.html", "/dashboard.html", "/index.html", "/events"])
     logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
     # 启动时自动打开浏览器（守护线程，避免拖到进程无法退出）

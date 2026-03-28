@@ -327,14 +327,16 @@
             if (loading) {
                 loading.style.width = 'auto';
                 loading.style.height = 'auto';
-                loading.style.top = '20px';
+                loading.style.bottom = '24px';
+                loading.style.top = 'auto';
                 loading.style.left = '50%';
                 loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(200, 0, 0, 0.8)';
-                loading.style.padding = '10px 20px';
+                loading.style.background = 'rgba(10, 10, 18, 0.82)';
+                loading.style.backdropFilter = 'blur(16px)';
+                loading.style.padding = '10px 24px';
                 loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid #ff6b6b';
-                loading.innerHTML = '⚠️ Code Error (Auto-refresh active).<br>' + (e.message || '');
+                loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
+                loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
             }
             if (!window.fallbackRendered) {
                 renderFallback();
@@ -354,31 +356,90 @@
         });
 
         function renderFallback() {
-            const container = document.getElementById('canvas-container');
-            container.innerHTML = '';
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
+            var ctr = document.getElementById('canvas-container');
+            ctr.innerHTML = '';
+            var scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060810);
+            scene.fog = new THREE.FogExp2(0x060810, 0.028);
 
-            const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
-            const material = new THREE.MeshNormalMaterial({ wireframe: true, transparent: true, opacity: 0.3 });
-            const torusKnot = new THREE.Mesh(geometry, material);
-            scene.add(torusKnot);
+            var cam = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+            cam.position.set(0, 0, 35);
 
-            camera.position.z = 30;
-            function animate() {
-                requestAnimationFrame(animate);
-                torusKnot.rotation.x += 0.005;
-                torusKnot.rotation.y += 0.005;
-                renderer.render(scene, camera);
+            var ren = new THREE.WebGLRenderer({ antialias: true });
+            ren.setSize(window.innerWidth, window.innerHeight);
+            ren.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            ren.toneMapping = THREE.ACESFilmicToneMapping;
+            ren.toneMappingExposure = 1.2;
+            ctr.appendChild(ren.domElement);
+
+            scene.add(new THREE.AmbientLight(0x1a1a2e, 0.5));
+            var L1 = new THREE.PointLight(0xd4af37, 1.0, 80);
+            L1.position.set(15, 10, 20); scene.add(L1);
+            var L2 = new THREE.PointLight(0x3d5afe, 0.7, 80);
+            L2.position.set(-15, -10, 15); scene.add(L2);
+
+            var N = 800, pos = new Float32Array(N * 3);
+            for (var i = 0; i < N; i++) {
+                var a = (i / N) * Math.PI * 2 + Math.random() * 0.4;
+                var r = 8 + Math.sin(a * 3) * 4 + Math.random() * 8;
+                pos[i * 3] = Math.cos(a) * r;
+                pos[i * 3 + 1] = (Math.random() - 0.5) * 20;
+                pos[i * 3 + 2] = Math.sin(a) * r;
             }
-            animate();
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+            var pg = new THREE.BufferGeometry();
+            pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            var pts = new THREE.Points(pg, new THREE.PointsMaterial({
+                size: 0.1, sizeAttenuation: true, color: 0xd4af37,
+                transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            scene.add(pts);
+
+            var icoM = new THREE.MeshPhysicalMaterial({
+                color: 0x0a1628, metalness: 0.85, roughness: 0.15,
+                emissive: 0x1a2a4a, emissiveIntensity: 0.4,
+                transparent: true, opacity: 0.8
+            });
+            var ico = new THREE.Mesh(new THREE.IcosahedronGeometry(4.5, 2), icoM);
+            scene.add(ico);
+
+            var ring = new THREE.Mesh(
+                new THREE.TorusGeometry(10, 0.02, 8, 128),
+                new THREE.MeshBasicMaterial({ color: 0xd4af37, transparent: true, opacity: 0.2 })
+            );
+            ring.rotation.x = Math.PI * 0.5;
+            scene.add(ring);
+
+            var ring2 = new THREE.Mesh(
+                new THREE.TorusGeometry(14, 0.015, 8, 128),
+                new THREE.MeshBasicMaterial({ color: 0x3d5afe, transparent: true, opacity: 0.12 })
+            );
+            ring2.rotation.x = Math.PI * 0.35;
+            ring2.rotation.y = Math.PI * 0.25;
+            scene.add(ring2);
+
+            function anim() {
+                requestAnimationFrame(anim);
+                var t = Date.now() * 0.001;
+                ico.rotation.x = t * 0.12; ico.rotation.y = t * 0.08;
+                icoM.emissiveIntensity = 0.3 + Math.sin(t * 0.6) * 0.15;
+                pts.rotation.y = t * 0.025;
+                ring.rotation.z = t * 0.015;
+                ring2.rotation.z = -t * 0.01;
+                L1.position.x = Math.cos(t * 0.18) * 18;
+                L1.position.z = Math.sin(t * 0.18) * 18;
+                L2.position.x = -Math.cos(t * 0.13) * 18;
+                L2.position.z = -Math.sin(t * 0.13) * 18;
+                cam.position.x = Math.sin(t * 0.04) * 4;
+                cam.position.y = Math.cos(t * 0.03) * 2.5;
+                cam.lookAt(0, 0, 0);
+                ren.render(scene, cam);
+            }
+            anim();
+
+            window.addEventListener('resize', function() {
+                cam.aspect = window.innerWidth / window.innerHeight;
+                cam.updateProjectionMatrix();
+                ren.setSize(window.innerWidth, window.innerHeight);
             });
         }
 
@@ -401,14 +462,16 @@
                 loading.style.display = 'block';
                 loading.style.width = 'auto';
                 loading.style.height = 'auto';
-                loading.style.top = '20px';
+                loading.style.bottom = '24px';
+                loading.style.top = 'auto';
                 loading.style.left = '50%';
                 loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(200, 0, 0, 0.8)';
-                loading.style.padding = '10px 20px';
+                loading.style.background = 'rgba(10, 10, 18, 0.82)';
+                loading.style.backdropFilter = 'blur(16px)';
+                loading.style.padding = '10px 24px';
                 loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid #ff6b6b';
-                loading.innerHTML = '⚠️ Runtime Error (Auto-refresh active).<br>' + err.message;
+                loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
+                loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
             }
             if (!window.fallbackRendered) {
                 renderFallback();

@@ -36,7 +36,7 @@ export class VisionSystem {
             numFaces: 1,
             minFaceDetectionConfidence: 0.55,
             minTrackingConfidence: 0.62,
-            outputFaceBlendshapes: false,
+            outputFaceBlendshapes: true,
             outputFacialTransformationMatrixes: false,
         });
 
@@ -76,6 +76,21 @@ export class VisionSystem {
                 ? faceResult.faceLandmarks[0]
                 : null;
             this.sharedData.face = face;
+
+            if (face && faceResult.faceBlendshapes && faceResult.faceBlendshapes.length > 0) {
+                const bs = faceResult.faceBlendshapes[0].categories;
+                const bm = {};
+                for (const c of bs) bm[c.categoryName] = c.score;
+                this.sharedData.emotions = {
+                    joy: Math.min(1, ((bm.mouthSmileLeft || 0) + (bm.mouthSmileRight || 0)) * 0.5),
+                    tension: Math.min(1, ((bm.browDownLeft || 0) + (bm.browDownRight || 0)) * 0.5
+                        + ((bm.mouthFrownLeft || 0) + (bm.mouthFrownRight || 0)) * 0.25),
+                    surprise: Math.min(1, (bm.browInnerUp || 0) * 0.5 + (bm.jawOpen || 0) * 0.5),
+                    calm: Math.min(1, ((bm.eyeBlinkLeft || 0) + (bm.eyeBlinkRight || 0)) * 0.5),
+                };
+            } else {
+                this.sharedData.emotions = { joy: 0, tension: 0, surprise: 0, calm: 0 };
+            }
 
             const poseResult = this._poseLandmarker.detectForVideo(this.video, ts);
             this.sharedData.pose = poseResult.landmarks && poseResult.landmarks.length > 0
