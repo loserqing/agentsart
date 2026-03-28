@@ -111,37 +111,36 @@ export class VisionSystem {
         this._rafId = requestAnimationFrame(tick);
     }
 
+    /**
+     * 仅在人脸 landmark 有效时截取人脸区域；无人脸时不截图（不回落到全画面），避免空景/误检帧进入分析。
+     * @returns {string|null} JPEG data URL 或 null
+     */
     captureFrame() {
+        const face = this.sharedData.face;
+        if (!face || face.length < 10) return null;
+
         const maxRes = 512;
+        const vw = this.video.videoWidth;
+        const vh = this.video.videoHeight;
+        if (vw <= 0 || vh <= 0) return null;
 
-        if (this.sharedData.face && this.sharedData.face.length > 0) {
-            const face = this.sharedData.face;
-            const vw = this.video.videoWidth;
-            const vh = this.video.videoHeight;
-
-            let minX = 1, minY = 1, maxX = 0, maxY = 0;
-            for (const pt of face) {
-                if (pt.x < minX) minX = pt.x;
-                if (pt.x > maxX) maxX = pt.x;
-                if (pt.y < minY) minY = pt.y;
-                if (pt.y > maxY) maxY = pt.y;
-            }
-
-            const cx = ((minX + maxX) / 2) * vw;
-            const cy = ((minY + maxY) / 2) * vh;
-            const w = (maxX - minX) * vw;
-            const h = (maxY - minY) * vh;
-            const size = Math.max(w, h) * 2.2;
-
-            this.captureCanvas.width = Math.min(size, maxRes);
-            this.captureCanvas.height = Math.min(size, maxRes);
-            this.captureCtx.drawImage(this.video, cx - size / 2, cy - size / 2, size, size, 0, 0, this.captureCanvas.width, this.captureCanvas.height);
-        } else {
-            const scale = Math.min(1, maxRes / Math.max(this.video.videoWidth, this.video.videoHeight));
-            this.captureCanvas.width = this.video.videoWidth * scale;
-            this.captureCanvas.height = this.video.videoHeight * scale;
-            this.captureCtx.drawImage(this.video, 0, 0, this.video.videoWidth, this.video.videoHeight, 0, 0, this.captureCanvas.width, this.captureCanvas.height);
+        let minX = 1, minY = 1, maxX = 0, maxY = 0;
+        for (const pt of face) {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
         }
+
+        const cx = ((minX + maxX) / 2) * vw;
+        const cy = ((minY + maxY) / 2) * vh;
+        const w = (maxX - minX) * vw;
+        const h = (maxY - minY) * vh;
+        const size = Math.max(w, h) * 2.2;
+
+        this.captureCanvas.width = Math.min(size, maxRes);
+        this.captureCanvas.height = Math.min(size, maxRes);
+        this.captureCtx.drawImage(this.video, cx - size / 2, cy - size / 2, size, size, 0, 0, this.captureCanvas.width, this.captureCanvas.height);
         return this.captureCanvas.toDataURL('image/jpeg', 0.8);
     }
 }

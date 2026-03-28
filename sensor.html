@@ -112,7 +112,7 @@
     </div>
 
     <script type="module">
-        import { VisionSystem } from './js/vision_capture.js?v=20260328t';
+        import { VisionSystem } from './js/vision_capture.js?v=20260328u';
 
         // --- Global State ---
         let visionSystem = null;
@@ -273,7 +273,7 @@
         let persistDetailLo = 0;
         let persistDetailHi = 0;
         let trackedContourFade = 0;
-        /** 脸/手轮廓细线慢显慢隐（与物理场 contour_fade 解耦） */
+        /** 轮廓细线慢显慢隐（与物理场 contour_fade 解耦） */
         let trackedContourLineAlpha = 0;
 
         /** 摄像头归一化坐标 → 全屏画布内 object-fit:contain 下的 UV（与画面中人像比例一致） */
@@ -321,8 +321,11 @@
             return { o, n };
         }
 
-        /** 仅脸部椭圆轮廓，不包含手部（手部不参与流体与线场） */
-        function buildSegmentBuffer(face, vw, vh, cw, ch) {
+        const LEFT_HAND_PAIRS  = [[13, 15], [15, 19], [15, 17], [15, 21]];
+        const RIGHT_HAND_PAIRS = [[14, 16], [16, 20], [16, 18], [16, 22]];
+        const HAND_MIN_VIS = 0.5;
+
+        function buildSegmentBuffer(face, pose, vw, vh, cw, ch) {
             segScratch.fill(0);
             let o = 0;
             let nFace = 0;
@@ -342,10 +345,26 @@
             const detailLo = nOvalSeg;
             const detailHi = nOvalSeg;
 
+            let nLeft = 0;
+            let nRight = 0;
+
+            if (pose && pose.length >= 23) {
+                for (const [ia, ib] of LEFT_HAND_PAIRS) {
+                    if (o < SEG_MAX * 4 && pushSegCanvas(segScratch, o, pose, ia, ib, vww, vhh, cww, chh, HAND_MIN_VIS)) {
+                        o += 4; nLeft++;
+                    }
+                }
+                for (const [ia, ib] of RIGHT_HAND_PAIRS) {
+                    if (o < SEG_MAX * 4 && pushSegCanvas(segScratch, o, pose, ia, ib, vww, vhh, cww, chh, HAND_MIN_VIS)) {
+                        o += 4; nRight++;
+                    }
+                }
+            }
+
             return {
                 nFace,
-                nLeft: 0,
-                nRight: 0,
+                nLeft,
+                nRight,
                 segFaceDetailLo: detailLo,
                 segFaceDetailHi: detailHi,
                 byteLength: Math.max(16, o * 4),
@@ -536,7 +555,7 @@
                     var acc = vec2<f32>(0.0, 0.0);
                     var nearLoose = 0.0;
                     var nearTight = 0.0;
-                    let kFace = 5.2 - uniforms.volatility * 0.35;
+                    let kFace = 6.8 - uniforms.volatility * 0.35;
                     let pr = uniforms.presence;
 
                     for (var i: i32 = 0; i < 160; i = i + 1) {
@@ -560,10 +579,32 @@
                     nearLoose = nearLoose * sb;
                     nearTight = nearTight * sb;
 
+                    // Hand segments: softer fluid disturbance, independent of face fade, no contour line
+                    let nL = i32(uniforms.seg_left);
+                    let nR = i32(uniforms.seg_right);
+                    let handK = 3.2;
+                    let handDecay = 0.55;
+                    let lOff = nF;
+                    for (var hL: i32 = 0; hL < 8; hL = hL + 1) {
+                        if (hL >= nL) { break; }
+                        let s = segments[lOff + hL];
+                        let m = segment_metrics(p, s.x, s.y, s.z, s.w, handK, uniforms.left_presence, handDecay);
+                        acc = acc + m.xy * 0.42;
+                        nearLoose = max(nearLoose, m.z * 0.38);
+                    }
+                    let rOff = nF + nL;
+                    for (var hR: i32 = 0; hR < 8; hR = hR + 1) {
+                        if (hR >= nR) { break; }
+                        let s = segments[rOff + hR];
+                        let m = segment_metrics(p, s.x, s.y, s.z, s.w, handK, uniforms.right_presence, handDecay);
+                        acc = acc + m.xy * 0.42;
+                        nearLoose = max(nearLoose, m.z * 0.38);
+                    }
+
                     let wsum = max(length(acc), 1e-6);
                     // 向轮廓聚拢：略宽的 wPull + 更高 pullAmp；呼吸周期稍慢，流向更易读
                     let gatherBreath = 0.68 + 0.32 * sin(uniforms.time * 0.28);
-                    let pullAmp = (0.007 + uniforms.motion * 0.010 + uniforms.presence * 0.006) * gatherBreath;
+                    let pullAmp = (0.005 + uniforms.motion * 0.004 + uniforms.presence * 0.003) * gatherBreath;
                     let drift = (acc / wsum) * pullAmp;
 
                     p = p + drift;
@@ -578,12 +619,12 @@
                     let flowBoost = 0.88 * faceIn;
                     let emotionFlow = max(0.88, 1.0 + uniforms.emotion_joy * 0.18 - uniforms.emotion_calm * 0.12);
                     let flowSpeedMult = mix(1.0, 1.0 + flowBoost, sb) * emotionFlow;
-                    let t = uniforms.time * (0.92 + uniforms.motion * 0.22) * flowSpeedMult;
+                    let t = uniforms.time * (0.92 + uniforms.motion * 0.22 * cnLVis) * flowSpeedMult;
 
                     p = p + vec2<f32>(
                         sin((p.y + t) * 3.4 + cnLVis * 3.7),
                         cos((p.x - t) * 3.2 - cnLVis * 3.2)
-                    ) * (0.0024 + uniforms.motion * 0.002 + cnLVis * 0.004 + uniforms.emotion_tension * 0.025) * flowSpeedMult * mix(0.5, 1.0, sb);
+                    ) * (0.0024 + uniforms.motion * 0.002 * cnLVis + cnLVis * 0.004 + uniforms.emotion_tension * 0.025 * cnLVis) * flowSpeedMult * mix(0.5, 1.0, sb);
                     
                     let pFbm = p + vec2<f32>(
                         fbm(p * 0.48 + vec2<f32>(cnLVis * 0.4, 0.0)),
@@ -608,7 +649,7 @@
                     let cyanMix = pow(f, 2.0) * 1.5 * (0.88 + cnLVis * 0.09 * mix(0.5, 1.0, sb) + cnTForFluid * 0.095 * mix(0.45, 1.0, sb));
                     color = mix(color, cyanBright, clamp(cyanMix, 0.0, 1.0));
                     
-                    let finalColor = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.03);
+                    let finalColor = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.03 * cnLVis);
                     var outRgb = finalColor - sin(fragCoord.y * 1.4) * 0.015;
 
                     // Face area → intensity boost (closer = brighter contour & flow)
@@ -715,7 +756,7 @@
             if (nf <= 0) return;
             if (
                 !smoothSegPrimed
-                || (lastSmoothedSegFloats > 0 && Math.abs(nf - lastSmoothedSegFloats) > 14)
+                || (lastSmoothedSegFloats > 0 && Math.abs(nf - lastSmoothedSegFloats) > 36)
             ) {
                 for (let i = 0; i < nf; i++) smoothSegScratch[i] = segScratch[i];
                 smoothSegPrimed = true;
@@ -749,8 +790,11 @@
             const targetPresence = (hasFace ? 0.48 : 0.0)
                 + (hasPose ? (hasFace ? 0.12 : 0.44) : 0.0);
             trackedPresence = lerp(trackedPresence, targetPresence, 0.07);
-            trackedLeftPresence = 0;
-            trackedRightPresence = 0;
+
+            const leftWristVis = (hasPose && sharedData.pose[15]) ? (sharedData.pose[15].visibility || 0) : 0;
+            const rightWristVis = (hasPose && sharedData.pose[16]) ? (sharedData.pose[16].visibility || 0) : 0;
+            trackedLeftPresence = lerp(trackedLeftPresence, leftWristVis > HAND_MIN_VIS ? 0.35 : 0, 0.06);
+            trackedRightPresence = lerp(trackedRightPresence, rightWristVis > HAND_MIN_VIS ? 0.35 : 0, 0.06);
 
             let faceSpeed = 0;
             if (hasFace && lastFaceCenter && dtSeconds > 0) {
@@ -842,21 +886,24 @@
             }
         }
 
-        /** 持续截图：质量达标时保存 localStorage + 限频上传服务端 */
+        /** 持续截图：仅有人脸且质量达标时裁剪上传；与 rAF 检测交错时再校验一次脸，避免全画面兜底截图 */
         async function continuousFaceCapture() {
             if (!visionSystem || captureUploading) return;
             const q = computeHeadshotQuality();
-            if (q < 0.4) return;
+            if (q < 0.45) return;
+            if (!sharedData.face || sharedData.face.length < 10) return;
 
             try {
                 const base64 = visionSystem.captureFrame();
+                if (!base64) return;
                 localStorage.setItem(
                     'agentsart_latest_capture',
                     JSON.stringify({ image: base64, timestamp: Date.now(), quality: q })
                 );
 
                 const now = Date.now();
-                if (q < 0.48 || now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
+                /* 提高上传阈值，减少「误检脸/大模糊场景」把垃圾帧送进服务端触发长文分析 */
+                if (q < 0.56 || now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
 
                 captureUploading = true;
                 lastFaceUploadAt = now;
@@ -932,6 +979,7 @@
             const vh = sharedData.videoRes.y || 480;
             const seg = buildSegmentBuffer(
                 sharedData.face,
+                sharedData.pose,
                 vw,
                 vh,
                 canvas.width,

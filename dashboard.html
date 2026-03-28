@@ -643,6 +643,10 @@
                 <div class="agent-name">Reviewer | 代码审查</div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
             </div>
+            <div class="agent-card" id="agent-fixer" style="--agent-color: #8a9eb8">
+                <div class="agent-name">Syntax Fix | 语法修复</div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+            </div>
             <div class="agent-card" id="agent-critic" style="--agent-color: #D0B8A8">
                 <div class="agent-name">Critic | 艺术评审</div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
@@ -701,19 +705,70 @@
             visual: { name: 'Visual', nameZh: '视觉设计', color: '#A8C2B5' },
             builder: { name: 'Builder', nameZh: '技术实现', color: '#9BB0C1' },
             reviewer: { name: 'Reviewer', nameZh: '代码审查', color: '#7b9acc' },
+            fixer: { name: 'Syntax Fix', nameZh: '语法修复', color: '#8a9eb8' },
             critic: { name: 'Critic', nameZh: '艺术评审', color: '#D0B8A8' },
         };
 
         let demoConversations = [];
         let currentIteration = 0; let currentMessage = 0; let isRunning = false; let lastTotalMsgs = 0;
         let _lastKnownIterNum = null;
+        let _regenActive = false;
+        let _sseActive = false;
+        let _parNv = { narrativeThinking: false, visualThinking: false };
 
         const timeline = document.getElementById('timeline');
+
+        function buildCollabMessagesFromLog(log) {
+            const msgs = [];
+            if (log.director) msgs.push({ agent: 'director', action: 'Define Art Direction', content: log.director.concept || 'Done' });
+            if (log.narrative) msgs.push({ agent: 'narrative', action: 'Build Narrative', content: log.narrative.title || 'Done' });
+            if (log.visual) msgs.push({ agent: 'visual', action: 'Design Visuals', content: typeof log.visual.visual_style_summary === 'string' ? log.visual.visual_style_summary : 'Done' });
+            if (log.builder) msgs.push({ agent: 'builder', action: 'Write Core Code', content: 'Three.js code generated (' + (log.builder.threejs_code || '').length + ' chars).' });
+            if (log.reviewer) msgs.push({ agent: 'reviewer', action: 'Code Review', content: log.reviewer.review_comments || 'Code Fixes Applied' });
+            if (log.critic) {
+                const sc = log.critic.total_score != null ? log.critic.total_score : 0;
+                const verdict = String(log.critic.conclusion || '').trim();
+                const ctb = verdict ? `Score: ${sc}/10\n评审结论：${verdict}` : `Score: ${sc}/10`;
+                msgs.push({ agent: 'critic', action: 'Art Evaluation', content: ctb });
+            }
+            return msgs;
+        }
+
+        function resetParallelNv() {
+            _parNv = { narrativeThinking: false, visualThinking: false };
+        }
+
+        function syncParallelNvCards() {
+            document.querySelectorAll('.agent-card:not(#agent-observer)').forEach(c => c.classList.remove('active'));
+            if (_parNv.narrativeThinking) {
+                const c = document.getElementById('agent-narrative');
+                if (c) { c.classList.add('active'); c.querySelector('.status-text').textContent = 'Thinking...'; }
+            }
+            if (_parNv.visualThinking) {
+                const c = document.getElementById('agent-visual');
+                if (c) { c.classList.add('active'); c.querySelector('.status-text').textContent = 'Thinking...'; }
+            }
+        }
+
+        function onNvStart(agent) {
+            if (agent === 'narrative') _parNv.narrativeThinking = true;
+            if (agent === 'visual') _parNv.visualThinking = true;
+            syncParallelNvCards();
+        }
+
+        function onNvDone(agent) {
+            if (agent === 'narrative') _parNv.narrativeThinking = false;
+            if (agent === 'visual') _parNv.visualThinking = false;
+            setAgentDone(agent);
+            const card = document.getElementById('agent-' + agent);
+            if (card) card.classList.remove('active');
+            if (_parNv.narrativeThinking || _parNv.visualThinking) syncParallelNvCards();
+        }
 
         function highlightText(text) {
             if (!text || typeof text !== 'string') return text;
             let html = text.replace(/(['"])(.*?)\1/g, '<span style="color: #A8C2B5; font-style: italic;">$&</span>');
-            const keywords = ['WebGPU', 'Shader', 'WGSL', 'Canvas', 'Code', 'Fixes', 'Error', 'Score', 'Review', 'Concept', 'Visual', 'Narrative', 'Done'];
+            const keywords = ['Three.js', 'WebGL', 'Syntax', 'Canvas', 'Code', 'Fixes', 'Error', 'Score', 'Review', 'Concept', 'Visual', 'Narrative', 'Regen', 'Done'];
             const regex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'gi');
             html = html.replace(regex, '<span style="color: #D4AF37; font-weight: 500;">$1</span>');
             return html;
@@ -782,12 +837,24 @@
         }
 
         function updateAgentStatus(agentKey, status) {
-            // Only deactivate internal agents, don't touch observer
             document.querySelectorAll('.agent-card:not(#agent-observer)').forEach(c => c.classList.remove('active'));
             const card = document.getElementById(`agent-${agentKey}`);
-            if(card && agentKey !== 'observer') {
+            if (card && agentKey !== 'observer') {
                 card.classList.add('active');
                 card.querySelector('.status-text').textContent = status;
+            }
+        }
+
+        function setAgentDone(agentKey) {
+            const card = document.getElementById(`agent-${agentKey}`);
+            if (card) card.querySelector('.status-text').textContent = 'Done';
+        }
+
+        function resetAgentCard(agentKey) {
+            const card = document.getElementById(`agent-${agentKey}`);
+            if (card) {
+                card.classList.remove('active');
+                card.querySelector('.status-text').textContent = 'Waiting...';
             }
         }
 
@@ -806,14 +873,14 @@
             }
 
             const msg = conv.messages[currentMessage];
-            updateAgentStatus(msg.agent, 'Thinking...');
+            if (!_sseActive) updateAgentStatus(msg.agent, 'Thinking...');
 
             setTimeout(() => {
-                updateAgentStatus(msg.agent, 'Outputting...');
+                if (!_sseActive) updateAgentStatus(msg.agent, 'Outputting...');
                 addTimelineMessage(msg, conv.iteration);
                 currentMessage++;
-                setTimeout(runNextMessage, 1500);
-            }, 1000);
+                setTimeout(runNextMessage, _sseActive ? 300 : 1500);
+            }, _sseActive ? 200 : 1000);
         }
 
         async function pollData() {
@@ -824,30 +891,35 @@
 
                     const fresh = [];
                     realLogs.forEach((log) => {
-                        const msgs = [];
-                        if (log.director) msgs.push({ agent: 'director', action: 'Define Art Direction', content: log.director.concept || 'Done' });
-                        if (log.narrative) msgs.push({ agent: 'narrative', action: 'Build Narrative', content: log.narrative.title || 'Done' });
-                        if (log.visual) msgs.push({ agent: 'visual', action: 'Design Visuals', content: typeof log.visual.visual_style_summary === 'string' ? log.visual.visual_style_summary : 'Done' });
-                        if (log.builder) msgs.push({ agent: 'builder', action: 'Write Core Code', content: 'WebGPU code generated.' });
-                        if (log.reviewer) msgs.push({ agent: 'reviewer', action: 'Code Review', content: log.reviewer.review_comments || 'Code Fixes Applied' });
-                        if (log.critic) {
-                            const sc = log.critic.total_score != null ? log.critic.total_score : 0;
-                            const verdict = String(log.critic.conclusion || '').trim();
-                            const ctb = verdict
-                                ? `Score: ${sc}/10\n评审结论：${verdict}`
-                                : `Score: ${sc}/10`;
-                            msgs.push({ agent: 'critic', action: 'Art Evaluation', content: ctb });
-                        }
-                        fresh.push({ iteration: log.iteration, messages: msgs });
+                        fresh.push({ iteration: log.iteration, messages: buildCollabMessagesFromLog(log) });
                     });
-                    demoConversations = fresh;
-
                     const latestIterNum = fresh.length ? fresh[fresh.length - 1].iteration : null;
+                    // 日志可存多轮；轮播回放只针对当前迭代，避免一次拉取 30 轮把协作区刷爆
+                    demoConversations = fresh.length ? [fresh[fresh.length - 1]] : [];
                     if (latestIterNum !== null && latestIterNum !== _lastKnownIterNum) {
                         _lastKnownIterNum = latestIterNum;
                         lastTotalMsgs = 0;
                         currentIteration = 0;
                         currentMessage = 0;
+                        isRunning = false;
+                        _sseActive = false;
+                        _regenActive = false;
+                        resetParallelNv();
+
+                        timeline.querySelectorAll('.timeline-item').forEach(el => el.remove());
+                        if (!document.getElementById('collab-placeholder')) {
+                            const ph = document.createElement('p');
+                            ph.id = 'collab-placeholder';
+                            ph.className = 'collab-placeholder';
+                            ph.textContent = `Iter ${latestIterNum} 启动 · 等待智能体推送…`;
+                            timeline.appendChild(ph);
+                        }
+
+                        document.querySelectorAll('.agent-card').forEach(c => {
+                            c.classList.remove('active');
+                            const st = c.querySelector('.status-text');
+                            if (st) st.textContent = 'Waiting...';
+                        });
                     }
                     const currentTotalMsgs = demoConversations.reduce((sum, conv) => sum + conv.messages.length, 0);
                     if (currentTotalMsgs > lastTotalMsgs) {
@@ -1120,13 +1192,47 @@
             _sse.onmessage = function(e) {
                 try {
                     const evt = JSON.parse(e.data);
+                    _sseActive = true;
+                    const regenActions = {
+                        builder: 'Regen Code',
+                        reviewer: 'Regen Review',
+                        critic: 'Regen Evaluation'
+                    };
                     if (evt.phase === 'start') {
-                        updateAgentStatus(evt.agent, 'Thinking...');
+                        if (evt.agent === 'narrative' || evt.agent === 'visual') {
+                            onNvStart(evt.agent);
+                        } else {
+                            if (evt.agent === 'builder') resetParallelNv();
+                            updateAgentStatus(evt.agent, evt.agent === 'fixer' ? 'Fixing...' : 'Thinking...');
+                        }
+                    } else if (evt.phase === 'regen') {
+                        if (evt.agent === 'critic') {
+                            _regenActive = true;
+                            resetAgentCard('reviewer');
+                            resetAgentCard('fixer');
+                            resetAgentCard('critic');
+                            updateAgentStatus('builder', 'Regenerating...');
+                            addTimelineMessage({
+                                agent: 'critic',
+                                action: '触发重生',
+                                content: (evt.summary || '评分不达标') + ' → Builder 重新生成'
+                            }, evt.iteration);
+                        } else if (evt.agent === 'builder') {
+                            updateAgentStatus('builder', 'Regenerating...');
+                        }
                     } else if (evt.phase === 'done') {
-                        const card = document.getElementById('agent-' + evt.agent);
-                        if (card) {
-                            card.classList.add('active');
-                            card.querySelector('.status-text').textContent = 'Done';
+                        if (evt.agent === 'narrative' || evt.agent === 'visual') {
+                            onNvDone(evt.agent);
+                        } else {
+                            setAgentDone(evt.agent);
+                        }
+                        if (_regenActive && regenActions[evt.agent]) {
+                            addTimelineMessage({
+                                agent: evt.agent,
+                                action: regenActions[evt.agent],
+                                content: evt.summary || 'Done'
+                            }, evt.iteration);
+                            if (evt.agent === 'critic') _regenActive = false;
                         }
                     }
                 } catch(err) {}

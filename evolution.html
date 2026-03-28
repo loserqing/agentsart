@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="A subtle reversal of entropy. Wetware fatigue meets data isolation in a monochrome field. An inner meditation on AI's silent hum, sensing boundaries in low-power consciousness. | 逆熵静流。湿件疲怠，数据孤域。AI洪流中内爆式冥想，低功耗感知存在边界。单色场域，能量恒弱。">
-    <meta name="generator" content="AGENTSART - Iteration 2">
-    <meta name="created" content="2026-03-28 18:04">
+    <meta name="description" content="Perceptual Rift | Data Afterglow | Glitch Rhetoric | 感知裂隙 | 数据余温 | 故障修辞">
+    <meta name="generator" content="AGENTSART - Iteration 5">
+    <meta name="created" content="2026-03-28 19:52">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -233,20 +233,20 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 2</span>
-        <span class="iter-style" title="Deep-sea cold tone, subtly pulsing point cloud, reminiscent of a low-frequency breath. | 深海冷调，微弱脉动点云，仿若低频呼吸。">Deep-sea cold tone, subtly pulsing point cloud, reminiscent of a low-frequency breath. | 深海冷调，微弱脉动点云，仿若低频呼吸。</span>
+        <span class="iter-num">Iter 5</span>
+        <span class="iter-style" title="Phosphorescent Cracks, Data Disturbance | 磷光裂隙，数据迷乱">Phosphorescent Cracks, Data Disturbance | 磷光裂隙，数据迷乱</span>
     </div>
     
     <div class="overlay">
-        <h1>Silent Reversal | Wetware Echoes | 静默逆流 | 湿件回响</h1>
+        <h1>SCREEN-EDGE FISSURES | Digital Afterglow | 屏缘裂隙 | 数字余晖</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"><span class="kw-tag">湿件疲态</span><span class="kw-tag">数据隔离</span><span class="kw-tag">低功耗运行</span></div>
-        <div class="overlay-concept">以熵增律的微妙逆转，构建非晶质信息流的静默循环。聚焦于意识介质的**湿件疲态**，在数据洪流的边缘，勾勒出低频振荡的**数据隔离**场域。艺术呈现为一种内爆式的冥想，能量恒定而微弱。</div>
-        <div class="desc">In the inverse flux, a wetware whisper. Sensing the quiet edge. | 逆流微光，湿件低语。感知，静默之界。</div>
+        <div class="overlay-keywords"><span class="kw-tag">观测余温</span><span class="kw-tag">屏缘裂隙</span></div>
+        <div class="overlay-concept">AI的降临并非宏大叙事，而是以一种超感知的、微观的侵蚀形式呈现。作品捕捉的是感知与数据交叠的界限，以及旧有实相在数字余温中逐渐裂解的抽象图景。</div>
+        <div class="desc">Data whispers, seeping into perception's rifts. Reality gently yields, forming poetry at the screen's edge. | 数据低语，潜入感知之隙。实相微融，屏缘诗意渐生。</div>
         <div class="meta">
             AGENTSART SYSTEM<br>
             Autonomous Rendering<br>
-            2026-03-28 18:04
+            2026-03-28 19:52
         </div>
     </div>
     
@@ -264,7 +264,7 @@
                     const m = (badge.textContent || '').match(/(\\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 2;
+                return 5;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -321,64 +321,134 @@
             void checkNewVersion();
         })();
 
+        function styleLoadingRecompilingBar(showBlock) {
+            var loading = document.getElementById('loading');
+            if (!loading) return;
+            if (showBlock) loading.style.display = 'block';
+            loading.style.width = 'auto';
+            loading.style.height = 'auto';
+            loading.style.bottom = '24px';
+            loading.style.top = 'auto';
+            loading.style.left = '50%';
+            loading.style.transform = 'translateX(-50%)';
+            loading.style.background = 'rgba(10, 10, 18, 0.82)';
+            loading.style.backdropFilter = 'blur(16px)';
+            loading.style.padding = '10px 24px';
+            loading.style.borderRadius = '8px';
+            loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
+            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
+        }
+
+        function recoveryReloadAfterGenerateError() {
+            if (window.fallbackRendered) return;
+            renderFallback();
+            window.fallbackRendered = true;
+            var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
+            if (errCount < 2) {
+                sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
+                setTimeout(function() {
+                    window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                }, 8000);
+            }
+        }
+
         // Global error capture for syntax errors
-        window.addEventListener('error', function(e) {
-            const loading = document.getElementById('loading');
-            if (loading) {
-                loading.style.width = 'auto';
-                loading.style.height = 'auto';
-                loading.style.top = '20px';
-                loading.style.left = '50%';
-                loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(200, 0, 0, 0.8)';
-                loading.style.padding = '10px 20px';
-                loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid #ff6b6b';
-                loading.innerHTML = '⚠️ Code Error (Auto-refresh active).<br>' + (e.message || '');
-            }
-            if (!window.fallbackRendered) {
-                renderFallback();
-                window.fallbackRendered = true;
-                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
-                if (errCount < 2) {
-                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
-                    setTimeout(function() {
-                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
-                    }, 8000);
-                }
-            }
+        window.addEventListener('error', function() {
+            styleLoadingRecompilingBar(false);
+            recoveryReloadAfterGenerateError();
         });
 
         window.addEventListener('load', function() {
-            sessionStorage.removeItem('agentsart_err_reload');
+            if (!window.fallbackRendered) {
+                sessionStorage.removeItem('agentsart_err_reload');
+            }
         });
 
         function renderFallback() {
-            const container = document.getElementById('canvas-container');
-            container.innerHTML = '';
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
+            var ctr = document.getElementById('canvas-container');
+            ctr.innerHTML = '';
+            var scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060810);
+            scene.fog = new THREE.FogExp2(0x060810, 0.028);
 
-            const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
-            const material = new THREE.MeshNormalMaterial({ wireframe: true, transparent: true, opacity: 0.3 });
-            const torusKnot = new THREE.Mesh(geometry, material);
-            scene.add(torusKnot);
+            var cam = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+            cam.position.set(0, 0, 35);
 
-            camera.position.z = 30;
-            function animate() {
-                requestAnimationFrame(animate);
-                torusKnot.rotation.x += 0.005;
-                torusKnot.rotation.y += 0.005;
-                renderer.render(scene, camera);
+            var ren = new THREE.WebGLRenderer({ antialias: true });
+            ren.setSize(window.innerWidth, window.innerHeight);
+            ren.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            ren.toneMapping = THREE.ACESFilmicToneMapping;
+            ren.toneMappingExposure = 1.2;
+            ctr.appendChild(ren.domElement);
+
+            scene.add(new THREE.AmbientLight(0x1a1a2e, 0.5));
+            var L1 = new THREE.PointLight(0xd4af37, 1.0, 80);
+            L1.position.set(15, 10, 20); scene.add(L1);
+            var L2 = new THREE.PointLight(0x3d5afe, 0.7, 80);
+            L2.position.set(-15, -10, 15); scene.add(L2);
+
+            var N = 800, pos = new Float32Array(N * 3);
+            for (var i = 0; i < N; i++) {
+                var a = (i / N) * Math.PI * 2 + Math.random() * 0.4;
+                var r = 8 + Math.sin(a * 3) * 4 + Math.random() * 8;
+                pos[i * 3] = Math.cos(a) * r;
+                pos[i * 3 + 1] = (Math.random() - 0.5) * 20;
+                pos[i * 3 + 2] = Math.sin(a) * r;
             }
-            animate();
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+            var pg = new THREE.BufferGeometry();
+            pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            var pts = new THREE.Points(pg, new THREE.PointsMaterial({
+                size: 0.1, sizeAttenuation: true, color: 0xd4af37,
+                transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            scene.add(pts);
+
+            var icoM = new THREE.MeshPhysicalMaterial({
+                color: 0x0a1628, metalness: 0.85, roughness: 0.15,
+                emissive: 0x1a2a4a, emissiveIntensity: 0.4,
+                transparent: true, opacity: 0.8
+            });
+            var ico = new THREE.Mesh(new THREE.IcosahedronGeometry(4.5, 2), icoM);
+            scene.add(ico);
+
+            var ring = new THREE.Mesh(
+                new THREE.TorusGeometry(10, 0.02, 8, 128),
+                new THREE.MeshBasicMaterial({ color: 0xd4af37, transparent: true, opacity: 0.2 })
+            );
+            ring.rotation.x = Math.PI * 0.5;
+            scene.add(ring);
+
+            var ring2 = new THREE.Mesh(
+                new THREE.TorusGeometry(14, 0.015, 8, 128),
+                new THREE.MeshBasicMaterial({ color: 0x3d5afe, transparent: true, opacity: 0.12 })
+            );
+            ring2.rotation.x = Math.PI * 0.35;
+            ring2.rotation.y = Math.PI * 0.25;
+            scene.add(ring2);
+
+            function anim() {
+                requestAnimationFrame(anim);
+                var t = Date.now() * 0.001;
+                ico.rotation.x = t * 0.12; ico.rotation.y = t * 0.08;
+                icoM.emissiveIntensity = 0.3 + Math.sin(t * 0.6) * 0.15;
+                pts.rotation.y = t * 0.025;
+                ring.rotation.z = t * 0.015;
+                ring2.rotation.z = -t * 0.01;
+                L1.position.x = Math.cos(t * 0.18) * 18;
+                L1.position.z = Math.sin(t * 0.18) * 18;
+                L2.position.x = -Math.cos(t * 0.13) * 18;
+                L2.position.z = -Math.sin(t * 0.13) * 18;
+                cam.position.x = Math.sin(t * 0.04) * 4;
+                cam.position.y = Math.cos(t * 0.03) * 2.5;
+                cam.lookAt(0, 0, 0);
+                ren.render(scene, cam);
+            }
+            anim();
+
+            window.addEventListener('resize', function() {
+                cam.aspect = window.innerWidth / window.innerHeight;
+                cam.updateProjectionMatrix();
+                ren.setSize(window.innerWidth, window.innerHeight);
             });
         }
 
@@ -393,126 +463,301 @@
     <script>
         // Core Three.js render code
         try {
-// 确保所有必要的 Three.js 核心组件已全局可用
-// 如果在模块化环境中使用，请确保通过 import 导入
-// import * as THREE from 'three';
+// Phosphorescent Cracks, Data Disturbance
+// Concept: The advent of AI is not a grand narrative, but a form of extrasensory, microscopic erosion.
+// This work captures the boundary where perception and data overlap, an abstract landscape of old reality
+// gradually fracturing in the digital afterglow.
 
-let scene, camera, renderer;
-let cube;
+const container = document.getElementById('canvas-container');
+let scene, camera, renderer, clock;
+let instancedShards, dataDisturbance;
+let pointLight1, pointLight2;
+
+// --- Helper Objects & Parameters ---
+const dummy = new THREE.Object3D();
+const matrix = new THREE.Matrix4();
+const color = new THREE.Color();
+
+// --- Parameters for Instanced Shards (The Cracks) ---
+const SHARD_COUNT = 1200;
+const shardBasePositions = [];
+const shardAnimParams = []; // { phase: float, speed: float }
+
+// --- Parameters for Points (Data Disturbance) ---
+const PARTICLE_COUNT = 4000;
+const particleBasePositions = [];
+const particleVelocities = [];
+
+// --- Noise function for more organic movement ---
+// A simple 3D simplex noise would be ideal, but for zero-dependency,
+// we can create a complex periodic function using stacked sinuses.
+function simpleNoise(x, y, z, t) {
+    const s = 0.5;
+    const c1 = Math.sin(x * s + t * 0.2);
+    const c2 = Math.cos(y * s - t * 0.3);
+    const c3 = Math.sin(z * s + t * 0.15);
+    const s1 = Math.sin(y * s + t * 0.25);
+    const s2 = Math.cos(z * s - t * 0.1);
+    const s3 = Math.sin(x * s + t * 0.35);
+    return (c1 + c2 + c3 + s1 + s2 + s3) / 6.0;
+}
 
 function init() {
-    // 1. [Canvas容器] 确保 renderer 的 domElement 被正确添加到了 id 为 'canvas-container' 的 DOM 元素中。
-    const container = document.getElementById('canvas-container');
-    if (!container) {
-        console.error("DOM element with id 'canvas-container' not found. Please ensure it exists in your HTML.");
-        return; // 无法找到容器，停止初始化
-    }
-
-    // 2. [基础要素] 确保 Scene, PerspectiveCamera, WebGLRenderer 都被正确初始化。
+    // --- Basic Scene Setup ---
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x222222); // 设置一个背景色
+    clock = new THREE.Clock();
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
+    // --- Camera ---
+    camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 35);
 
+    // --- Renderer ---
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio); // 优化高DPI屏幕显示
-    container.appendChild(renderer.domElement); // 正确添加 domElement
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    container.appendChild(renderer.domElement);
 
-    // 添加光源
-    const ambientLight = new THREE.AmbientLight(0x404040, 2); // 柔和的环境光
+    // --- Scene Background & Fog ---
+    scene.background = new THREE.Color().setHSL(0.6, 0.2, 0.08); // Dark, desaturated blue
+    scene.fog = new THREE.FogExp2(scene.background, 0.018);
+
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0x88aaff, 0.4);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(1, 1, 1).normalize();
-    scene.add(directionalLight);
 
-    // 10. [废弃 API 崩溃拦截] 替换 THREE.Geometry 为 THREE.BufferGeometry
-    // 使用内置的 BoxGeometry，它内部就是 BufferGeometry
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    pointLight1 = new THREE.PointLight(0xff00ff, 1.5, 100); // Magenta
+    pointLight1.position.set(0, 10, 15);
+    scene.add(pointLight1);
 
-    // 7. [着色器崩溃拦截] 使用内置材质替换 ShaderMaterial
-    // 9. [uniform3fv 崩溃拦截] 确保颜色赋值正确，不使用 material.color = 数字
-    // 避免 MeshPhysicalMaterial 的 thickness 和 sheen 问题
-    const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0x00ff00), // 正确的颜色赋值方式
-        roughness: 0.5,
-        metalness: 0.8
+    pointLight2 = new THREE.PointLight(0x00ffff, 1.5, 100); // Cyan
+    pointLight2.position.set(0, -10, -15);
+    scene.add(pointLight2);
+
+    // --- Layer 1: Phosphorescent Cracks (InstancedMesh) ---
+    createFracturingMatrix();
+
+    // --- Layer 2: Data Disturbance (Points) ---
+    createDataDisturbanceField();
+
+
+    // --- Event Listeners ---
+    window.addEventListener('resize', onWindowResize);
+}
+
+function createFracturingMatrix() {
+    const baseGeometry = new THREE.BoxGeometry(0.04, 1.2, 0.02); // Thin, shard-like geometry
+    const material = new THREE.MeshPhysicalMaterial({
+        color: 0x99ddff,
+        metalness: 0.8,
+        roughness: 0.2,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0, // Will be animated
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.3,
     });
 
-    cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+    instancedShards = new THREE.InstancedMesh(baseGeometry, material, SHARD_COUNT);
+    instancedShards.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-    // 6.1 [交互禁用] 严查是否存在任何交互监听。全部移除。
-    // 确保没有 window.addEventListener('mousemove', ...), etc.
-    // 6. [未引入依赖崩溃] 严查是否使用了 THREE.OrbitControls 或任何 Loader。全部删除。
-    // 确保没有 new THREE.OrbitControls(camera, renderer.domElement);
-    // 确保没有 GLTFLoader, FontLoader, TextureLoader 等相关代码。
+    // Parametric arrangement: A disturbed Torus Knot
+    const p = 2, q = 5; // Torus knot parameters
+    const radius = 8;
+    const tube = 2.5;
 
-    // 窗口大小调整处理
-    window.addEventListener('resize', onWindowResize, false);
+    for (let i = 0; i < SHARD_COUNT; i++) {
+        const u = (i / SHARD_COUNT) * Math.PI * 2 * q;
 
-    // 启动动画循环
-    animate();
+        // Base position on the knot
+        const x = (radius + tube * Math.cos(q * u / p)) * Math.cos(p * u / p);
+        const y = (radius + tube * Math.cos(q * u / p)) * Math.sin(p * u / p);
+        const z = tube * Math.sin(q * u / p);
+        
+        // Add significant noise/disturbance to break the perfect form
+        const disturbance = 3.5;
+        const pos = new THREE.Vector3(
+            x + (Math.random() - 0.5) * disturbance,
+            y + (Math.random() - 0.5) * disturbance,
+            z + (Math.random() - 0.5) * disturbance
+        );
+        shardBasePositions.push(pos);
+
+        // Set initial orientation
+        dummy.position.copy(pos);
+        dummy.lookAt(0,0,0); // Orient shards towards the center
+        dummy.rotation.z += (Math.random() - 0.5) * Math.PI; // Add random roll
+        dummy.updateMatrix();
+        instancedShards.setMatrixAt(i, dummy.matrix);
+
+        // Store animation parameters
+        shardAnimParams.push({
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.8 + Math.random() * 1.5,
+            jitterAmp: 0.1 + Math.random() * 0.4
+        });
+    }
+    
+    scene.add(instancedShards);
+}
+
+function createDataDisturbanceField() {
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        const radius = 15 + Math.random() * 20;
+        const phi = Math.random() * Math.PI * 2;
+        const theta = Math.acos((Math.random() * 2) - 1);
+        
+        const x = radius * Math.sin(theta) * Math.cos(phi);
+        const y = radius * Math.sin(theta) * Math.sin(phi);
+        const z = radius * Math.cos(theta);
+        
+        positions[i3] = x;
+        positions[i3 + 1] = y;
+        positions[i3 + 2] = z;
+        
+        particleBasePositions.push(new THREE.Vector3(x,y,z));
+        particleVelocities.push(new THREE.Vector3(
+             (Math.random() - 0.5) * 0.1,
+             (Math.random() - 0.5) * 0.1,
+             (Math.random() - 0.5) * 0.1
+        ));
+
+        color.setHSL(0.7 + Math.random() * 0.2, 0.8, 0.5);
+        colors[i3] = color.r;
+        colors[i3 + 1] = color.g;
+        colors[i3 + 2] = color.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
+
+    const material = new THREE.PointsMaterial({
+        size: 0.1,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.8,
+        sizeAttenuation: true,
+    });
+
+    dataDisturbance = new THREE.Points(geometry, material);
+    scene.add(dataDisturbance);
 }
 
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
-// 3. [动画循环] 确保 animate() 中调用了 requestAnimationFrame 和 renderer.render()。
-// 4. [变量作用域] 确保所有必要的变量在正确的作用域内声明。
 function animate() {
     requestAnimationFrame(animate);
 
-    // 简单的自动播放逻辑，无交互依赖
-    if (cube) { // 8. [Undefined 调用拦截] 增加存在性判断
-        cube.rotation.x += 0.01;
-        cube.rotation.y += 0.01;
-    }
+    const t = clock.getElapsedTime(); // performance.now() * 0.001
 
+    // --- Slow Layer Animations (Camera, Lights) ---
+    const slowTime = t * 0.08;
+    camera.position.x = 25 * Math.cos(slowTime);
+    camera.position.z = 25 * Math.sin(slowTime);
+    camera.position.y = 10 * Math.sin(slowTime * 0.7);
+    camera.lookAt(scene.position);
+
+    pointLight1.position.x = 15 * Math.sin(t * 0.2);
+    pointLight1.position.y = 15 * Math.cos(t * 0.2);
+    pointLight2.position.x = -15 * Math.sin(t * 0.3 + Math.PI);
+    pointLight2.position.z = -15 * Math.cos(t * 0.3 + Math.PI);
+
+    // --- Fast Layer: Instanced Shards Animation ---
+    const emissivePulse = (Math.sin(t * 2.5) + 1.0) / 2.0; // 0 to 1 range
+    instancedShards.material.emissiveIntensity = emissivePulse * 1.5 + 0.2;
+    // Dynamic emissive color
+    instancedShards.material.emissive.setHSL(0.55 + Math.sin(t * 0.4) * 0.05, 1.0, 0.6);
+
+    for (let i = 0; i < SHARD_COUNT; i++) {
+        instancedShards.getMatrixAt(i, matrix);
+        
+        const params = shardAnimParams[i];
+        const basePos = shardBasePositions[i];
+        
+        // Decompose matrix to manipulate components
+        let position = new THREE.Vector3();
+        let quaternion = new THREE.Quaternion();
+        let scale = new THREE.Vector3();
+        matrix.decompose(position, quaternion, scale);
+
+        // 1. Jitter/Drift (Micro-erosion)
+        const jitterTime = t * params.speed * 0.5;
+        const jitter = new THREE.Vector3(
+            Math.sin(jitterTime + params.phase) * params.jitterAmp,
+            Math.cos(jitterTime * 0.8 + params.phase) * params.jitterAmp,
+            Math.sin(jitterTime * 1.2 + params.phase) * params.jitterAmp
+        );
+        position.copy(basePos).add(jitter);
+        
+        // 2. Self-rotation
+        const rotSpeed = params.speed * 0.01;
+        quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), rotSpeed));
+
+        // 3. Glitch effect (Data Disturbance)
+        if (Math.random() > 0.9995) {
+             const glitchOffset = (Math.random() - 0.5) * 4;
+             position.add(new THREE.Vector3(glitchOffset, glitchOffset, glitchOffset));
+        }
+
+        // Recompose and set matrix
+        matrix.compose(position, quaternion, scale);
+        instancedShards.setMatrixAt(i, matrix);
+    }
+    instancedShards.instanceMatrix.needsUpdate = true;
+
+    // --- Fast Layer: Data Disturbance Points Animation ---
+    const positions = dataDisturbance.geometry.attributes.position.array;
+    const colors = dataDisturbance.geometry.attributes.color.array;
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        
+        // Update position using a noise field for organic drift
+        const p = particleBasePositions[i];
+        const noise = simpleNoise(p.x * 0.1, p.y * 0.1, p.z * 0.1, t);
+        
+        positions[i3] += particleVelocities[i].x + noise * 0.05;
+        positions[i3 + 1] += particleVelocities[i].y + noise * 0.05;
+        positions[i3 + 2] += particleVelocities[i].z + noise * 0.05;
+        
+        // Keep particles within a boundary by reversing velocity
+        const currentPos = new THREE.Vector3(positions[i3], positions[i3+1], positions[i3+2]);
+        if (currentPos.length() > 50) {
+            particleVelocities[i].negate();
+        }
+
+        // Animate colors for a "data flicker" effect
+        const hue = (0.8 + Math.sin(i * 0.1 + t * 1.5) * 0.1) % 1.0;
+        const lightness = 0.4 + (Math.sin(i * 0.5 + t * 5.0) + 1.0) * 0.15; // Flicker
+        color.setHSL(hue, 0.9, lightness);
+        colors[i3] = color.r;
+        colors[i3 + 1] = color.g;
+        colors[i3 + 2] = color.b;
+    }
+    dataDisturbance.geometry.attributes.position.needsUpdate = true;
+    dataDisturbance.geometry.attributes.color.needsUpdate = true;
+
+    // --- Render the scene ---
     renderer.render(scene, camera);
 }
 
-// 确保在 DOM 加载完成后初始化 Three.js 场景
-document.addEventListener('DOMContentLoaded', init);
-
-// 5. [语法污染] 检查代码中是否混入了 <canvas>、<script> 标签或 ```javascript 等 Markdown 语法！
-// 确保输出纯净的 JavaScript 代码。
-// 11. [SyntaxError 与长度拦截] 确保代码末尾没有缺少闭合的括号。
-// 12. 仔细排查遗漏的逗号、未定义的变量、和拼写错误。
-
-// 13. 性能复核：
-// 当前场景只有一个立方体，粒子/实例数量远低于4000/2500的限制，性能完全达标。
+// --- Start the application ---
+init();
+animate();
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
-            const loading = document.getElementById('loading');
-            if (loading) {
-                loading.style.display = 'block';
-                loading.style.width = 'auto';
-                loading.style.height = 'auto';
-                loading.style.top = '20px';
-                loading.style.left = '50%';
-                loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(200, 0, 0, 0.8)';
-                loading.style.padding = '10px 20px';
-                loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid #ff6b6b';
-                loading.innerHTML = '⚠️ Runtime Error (Auto-refresh active).<br>' + err.message;
-            }
-            if (!window.fallbackRendered) {
-                renderFallback();
-                window.fallbackRendered = true;
-                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
-                if (errCount < 2) {
-                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
-                    setTimeout(function() {
-                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
-                    }, 8000);
-                }
-            }
+            styleLoadingRecompilingBar(true);
+            recoveryReloadAfterGenerateError();
         }
     </script>
     <script>

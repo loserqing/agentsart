@@ -225,7 +225,11 @@ def orchestrator_loop():
                 print("📷 发现缓存人脸截图，启动 Gemini 分析…")
                 _state_update(face_analysis_status="analyzing", face_analysis_error=None)
                 result = _run_face_analysis(face_img)
-                if result:
+                if result is not None and result.get("subject_present") is False:
+                    print("📷 无可分析人脸：已清空服务端截图与人类分析（与画面无人一致）")
+                    _clear_human_observer_state()
+                    influence = None
+                elif result:
                     kw_line = ""
                     if result["creative_keywords"]:
                         kw_line = "\n【创作关键词】" + "、".join(result["creative_keywords"])
@@ -413,6 +417,22 @@ def _ensure_creative_keywords(raw, summary: str, director_influence: str) -> lis
 
     return merged[:_MAX_CREATIVE_KW]
 
+
+def _clear_human_observer_state():
+    """与 /clear_presence 一致：无人脸或模型判定无可分析主体时清空截图与人类简报。"""
+    _state_update(
+        human_director_brief=None,
+        last_analysis_report=None,
+        last_face_image=None,
+        last_face_upload_at=None,
+        creative_keywords=[],
+        human_metrics={},
+        face_analysis_status="idle",
+        face_analysis_error=None,
+        timestamp=time.time(),
+    )
+
+
 MAX_FACE_IMAGE_BYTES = 6 * 1024 * 1024
 _face_genai_client = None
 
@@ -495,6 +515,13 @@ def _run_face_analysis(image_b64: str) -> dict | None:
 
         try:
             analysis_json = json.loads(analysis_text)
+            sp = analysis_json.get("subject_present", True)
+            if isinstance(sp, str):
+                sp = sp.strip().lower() in ("1", "true", "yes", "是")
+            if sp is False:
+                print("📷 模型判定 subject_present=false（无可分析人脸），不写入人类简报")
+                return {"subject_present": False}
+
             raw_summary = analysis_json.get("summary", analysis_text)
             if raw_summary is not None and not isinstance(raw_summary, str):
                 raw_summary = str(raw_summary)
@@ -522,6 +549,7 @@ def _run_face_analysis(image_b64: str) -> dict | None:
 
         print(f"✅ 人脸分析完成（约 800 字叙述 + {len(creative_keywords)} 条创作关键词）")
         return {
+            "subject_present": True,
             "summary": summary,
             "director_influence": director_influence,
             "creative_keywords": creative_keywords,
@@ -547,17 +575,7 @@ async def upload_face(req: ProcessFaceRequest):
 @app.post("/clear_presence", tags=["Core"])
 async def clear_presence():
     """画面内持续无人时由 sensor 调用：清空服务端截图与人类分析展示，看板回到待机自我介绍。"""
-    _state_update(
-        human_director_brief=None,
-        last_analysis_report=None,
-        last_face_image=None,
-        last_face_upload_at=None,
-        creative_keywords=[],
-        human_metrics={},
-        face_analysis_status="idle",
-        face_analysis_error=None,
-        timestamp=time.time(),
-    )
+    _clear_human_observer_state()
     print("🧹 已清空人类分析展示状态（画面内无人）")
     return JSONResponse({"status": "ok", "face_analysis_status": "idle"})
 
@@ -592,7 +610,7 @@ async def agent_events(request: Request):
     async def generate():
         nonlocal last_id
         try:
-            while True:
+            while not shutdown_event.is_set():
                 with _agent_events_lock:
                     new = [e for e in _agent_events if e["id"] > last_id]
                 for evt in new:

@@ -17,15 +17,26 @@ AVATAR_ANALYSIS_PROMPT = """
   · **实时情绪缓存**：当下情绪状态的读取。  
 - **不要**输出「终极系统判决」或任何单独标题式收尾段；收束自然融在最后一段叙述即可。
 
-**输出**：仅输出**一个** JSON 对象，禁止 markdown 围栏，禁止任何额外说明。
-1. "summary"： string，满足上述全部文字要求（含 **4～6 段**）；**仅段间单换行、严禁空行**；在 JSON 字符串中用 `\n` 表示换行。
-2. "director_influence"： string，**50 字以内**，提炼可交给「创意总监」的核心氛围、情绪或视觉隐喻（与旧版「任务指令」第 2 条同旨）。
-3. "creative_keywords"：**必填**，string 数组，**2～3 条**（不得多于此数），每条约 2～6 字的中文短语，从画面中可核对的气质或特征压缩而来——**观众**将在看板读到这些词（像展签摘要）；下一轮 **创意总监生成作品时也必须参考**这些词作气质锚点（与 `director_influence`、summary 一致）。**禁止**空数组、**禁止**仅 1 条；禁用「好看」「有趣」等空泛词。
-4. "metrics"： object，整数，须与 summary 气质大体一致（映射旧版指标体系之感）：
-   - "aesthetic_entropy"：0–100（美学熵值）
-   - "cyborgization_pct"：0–100（赛博格化潜质）
-   - "ai_survival_pct"：0–100（综合生存概率之感）
+**可分析主体（必须先判，高于一切文风要求）**  
+若画面中**没有**可供侧写的**清晰、可辨认的人脸**（例如：室内空景、无人、人物背对且无面部、脸占画面过小、严重失焦/过暗/过曝导致五官不可核对、仅衣物/家具/弧线等非面部主体），则必须设 **`"subject_present": false`**。此时：
+- **严禁**按上文「800 字福尔摩斯」体例胡编面部或湿件细节；**严禁**把场景物件臆想成五官。
+- `"summary"`：**仅 1～2 句**客观说明「当前画面无可分析人脸」及可见场景类型即可（总字数 **≤80 汉字**）。
+- `"director_influence"`：`""`
+- `"creative_keywords"`：`[]`
+- `"metrics"`：可全为 `0` 或省略子字段。
 
-**JSON 形状示例**（字段名与类型必须一致，内容替换为真实推断）：
-{"summary":"……","director_influence":"……","creative_keywords":["……"],"metrics":{"aesthetic_entropy":64,"cyborgization_pct":38,"ai_survival_pct":71}}
+仅当存在**清晰可辨、可对像素负责的人脸**时，设 **`"subject_present": true`**，再按上文全套要求写 summary、关键词与 metrics。
+
+**输出**：仅输出**一个** JSON 对象，禁止 markdown 围栏，禁止任何额外说明。
+0. **"subject_present"**： boolean，**必填**。
+1. "summary"： string。若 `subject_present` 为 true：满足上述全部文字要求（含 **4～6 段**）；**仅段间单换行、严禁空行**；在 JSON 字符串中用 `\n` 表示换行。若为 false：短句即可（见上）。
+2. "director_influence"： string。subject_present 为 false 时必须 `""`；为 true 时 **50 字以内**。
+3. "creative_keywords"： string 数组。subject_present 为 false 时必须 `[]`；为 true 时 **2～3 条**，规则同前。
+4. "metrics"： object（subject_present 为 false 时可 `{"aesthetic_entropy":0,"cyborgization_pct":0,"ai_survival_pct":0}`）。
+
+**JSON 形状示例（有人脸）**：
+{"subject_present":true,"summary":"……","director_influence":"……","creative_keywords":["……"],"metrics":{"aesthetic_entropy":64,"cyborgization_pct":38,"ai_survival_pct":71}}
+
+**JSON 形状示例（无人脸）**：
+{"subject_present":false,"summary":"当前画面未见可辨认人脸，仅为室内失焦场景。","director_influence":"","creative_keywords":[],"metrics":{"aesthetic_entropy":0,"cyborgization_pct":0,"ai_survival_pct":0}}
 """

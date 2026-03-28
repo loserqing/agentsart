@@ -321,38 +321,47 @@
             void checkNewVersion();
         })();
 
+        function styleLoadingRecompilingBar(showBlock) {
+            var loading = document.getElementById('loading');
+            if (!loading) return;
+            if (showBlock) loading.style.display = 'block';
+            loading.style.width = 'auto';
+            loading.style.height = 'auto';
+            loading.style.bottom = '24px';
+            loading.style.top = 'auto';
+            loading.style.left = '50%';
+            loading.style.transform = 'translateX(-50%)';
+            loading.style.background = 'rgba(10, 10, 18, 0.82)';
+            loading.style.backdropFilter = 'blur(16px)';
+            loading.style.padding = '10px 24px';
+            loading.style.borderRadius = '8px';
+            loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
+            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
+        }
+
+        function recoveryReloadAfterGenerateError() {
+            if (window.fallbackRendered) return;
+            renderFallback();
+            window.fallbackRendered = true;
+            var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
+            if (errCount < 2) {
+                sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
+                setTimeout(function() {
+                    window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
+                }, 8000);
+            }
+        }
+
         // Global error capture for syntax errors
-        window.addEventListener('error', function(e) {
-            const loading = document.getElementById('loading');
-            if (loading) {
-                loading.style.width = 'auto';
-                loading.style.height = 'auto';
-                loading.style.bottom = '24px';
-                loading.style.top = 'auto';
-                loading.style.left = '50%';
-                loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(10, 10, 18, 0.82)';
-                loading.style.backdropFilter = 'blur(16px)';
-                loading.style.padding = '10px 24px';
-                loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
-                loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
-            }
-            if (!window.fallbackRendered) {
-                renderFallback();
-                window.fallbackRendered = true;
-                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
-                if (errCount < 2) {
-                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
-                    setTimeout(function() {
-                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
-                    }, 8000);
-                }
-            }
+        window.addEventListener('error', function() {
+            styleLoadingRecompilingBar(false);
+            recoveryReloadAfterGenerateError();
         });
 
         window.addEventListener('load', function() {
-            sessionStorage.removeItem('agentsart_err_reload');
+            if (!window.fallbackRendered) {
+                sessionStorage.removeItem('agentsart_err_reload');
+            }
         });
 
         function renderFallback() {
@@ -457,33 +466,8 @@
 {threejs_code}
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
-            const loading = document.getElementById('loading');
-            if (loading) {
-                loading.style.display = 'block';
-                loading.style.width = 'auto';
-                loading.style.height = 'auto';
-                loading.style.bottom = '24px';
-                loading.style.top = 'auto';
-                loading.style.left = '50%';
-                loading.style.transform = 'translateX(-50%)';
-                loading.style.background = 'rgba(10, 10, 18, 0.82)';
-                loading.style.backdropFilter = 'blur(16px)';
-                loading.style.padding = '10px 24px';
-                loading.style.borderRadius = '8px';
-                loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
-                loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
-            }
-            if (!window.fallbackRendered) {
-                renderFallback();
-                window.fallbackRendered = true;
-                var errCount = parseInt(sessionStorage.getItem('agentsart_err_reload') || '0', 10);
-                if (errCount < 2) {
-                    sessionStorage.setItem('agentsart_err_reload', String(errCount + 1));
-                    setTimeout(function() {
-                        window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
-                    }, 8000);
-                }
-            }
+            styleLoadingRecompilingBar(true);
+            recoveryReloadAfterGenerateError();
         }
     </script>
     <script>

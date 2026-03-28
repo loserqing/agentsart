@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-完整版多智能体协作编排器 - 生成可运行的 WebGPU 作品
+多智能体协作编排器：生成可嵌入 evolution.html 的 Three.js (WebGL) 生成艺术。
 技术栈：LangGraph (StateGraph) + langchain-google-genai
 """
 
@@ -27,6 +27,45 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 def _evolution_chain_from_env() -> bool:
     return os.getenv("AGENTSART_EVOLUTION_CHAIN", "").strip().lower() in ("1", "true", "yes")
+
+
+# iteration_log.json 最多保留条数（0 表示不截断）
+_ITERATION_LOG_MAX_ENTRIES = int(os.getenv("AGENTSART_ITERATION_LOG_MAX", "30"))
+
+
+def _clamp_animation_speeds_in_js(code: str) -> str:
+    """
+    程序化抬升过小的 *speed* 变量初值（不依赖 LLM），避免画面「看似静止」。
+    仅匹配标识符中含 speed/Speed 的赋值，如 cameraOrbitSpeed = 0.00005
+    """
+    if not code or len(code) < 40:
+        return code
+
+    assign_re = re.compile(
+        r"(?<![\w.])(?P<name>[A-Za-z_][\w]*[Ss]peed[\w]*)\s*=\s*"
+        r"(?P<num>\d+(?:\.\d*)?|\.\d+)(?P<exp>[eE][+-]?\d+)?"
+    )
+
+    def pick_replacement(name: str) -> float:
+        low = name.lower()
+        if "camera" in low or "orbit" in low:
+            return 0.07
+        if any(k in low for k in ("emissive", "fog", "pulse", "density", "global", "ambient")):
+            return 1.2
+        return 1.0
+
+    def repl(m: re.Match) -> str:
+        raw = m.group("num") + (m.group("exp") or "")
+        try:
+            v = float(raw)
+        except ValueError:
+            return m.group(0)
+        if v <= 0 or v >= 0.01:
+            return m.group(0)
+        new_v = pick_replacement(m.group("name"))
+        return f"{m.group('name')} = {new_v}"
+
+    return assign_re.sub(repl, code)
 
 
 def _atomic_write(path: Path, content: str):
@@ -107,6 +146,7 @@ class PipelineState(TypedDict, total=False):
     syntax_valid: bool
     syntax_error: str
     fix_attempts: int
+    regen_attempts: int
 
 
 # --------------- orchestrator class ---------------
@@ -117,14 +157,19 @@ class FullOrchestrator:
         raw_model = model or os.getenv("DEFAULT_MODEL", "gemini/gemini-2.0-flash")
         self.model_name = _normalize_model_name(raw_model)
 
+        raw_code_model = os.getenv("CODE_MODEL", "")
+        code_model_name = _normalize_model_name(raw_code_model) if raw_code_model.strip() else self.model_name
+
         self.llm = ChatGoogleGenerativeAI(
             model=self.model_name,
             temperature=0.85,
         )
         self.llm_code = ChatGoogleGenerativeAI(
-            model=self.model_name,
-            temperature=0.5,
+            model=code_model_name,
+            temperature=0.72,
         )
+        if code_model_name != self.model_name:
+            print(f"   📐 文本模型: {self.model_name} | 代码模型: {code_model_name}")
 
         _tpl_path = Path(__file__).parent / "evolution_template.html"
         self.html_template = _tpl_path.read_text(encoding="utf-8")
@@ -157,7 +202,7 @@ class FullOrchestrator:
         g.add_edge("reviewer", "syntax_guard")
         g.add_conditional_edges("syntax_guard", self._route_after_syntax)
         g.add_edge("code_fixer", "syntax_guard")
-        g.add_edge("critic", END)
+        g.add_conditional_edges("critic", self._route_after_critic)
         return g.compile()
 
     # ---- LLM helper ----
@@ -286,11 +331,33 @@ class FullOrchestrator:
             return "critic"
         return "code_fixer"
 
+    def _route_after_critic(self, state: PipelineState) -> str:
+        critic_data = state.get("critic", {})
+        score = critic_data.get("total_score", 10)
+        if isinstance(score, str):
+            try:
+                score = float(score)
+            except ValueError:
+                score = 10
+        publish_ready = critic_data.get("publish_ready", False)
+        iteration = state.get("iteration", 0)
+        if state.get("regen_attempts", 0) < 1:
+            reason = ""
+            if score < 7.5:
+                reason = f"评分 {score}/10 < 7.5"
+            elif not publish_ready and score < 8.5:
+                reason = f"评分 {score}/10 · publish_ready=false"
+            if reason:
+                print(f"   🔄 {reason}，触发 Builder 重新生成")
+                self._emit("critic", "regen", iteration, reason)
+                return "builder"
+        return END
+
     def _node_code_fixer(self, state: PipelineState) -> dict:
         iteration = state["iteration"]
         attempt = state.get("fix_attempts", 0) + 1
         print(f"🔧 代码语法修复（第 {attempt} 次）...")
-        self._emit("reviewer", "start", iteration)
+        self._emit("fixer", "start", iteration)
 
         code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
         error = state.get("syntax_error", "")
@@ -312,12 +379,12 @@ class FullOrchestrator:
 4. 输出完整代码，用 ```javascript 和 ``` 包裹。"""
 
         raw = self._llm_call(prompt, code_mode=True)
-        fixed = self._extract_js_code(raw) or code
+        fixed = _clamp_animation_speeds_in_js(self._extract_js_code(raw) or code)
 
         result = dict(state.get("reviewer") or state.get("builder") or {})
         result["threejs_code"] = fixed
         print(f"   ✓ 修复代码 ({len(fixed)} 字符)")
-        self._emit("reviewer", "done", iteration, f"Syntax fix #{attempt}")
+        self._emit("fixer", "done", iteration, f"Syntax fix #{attempt}")
 
         self._update_log(
             iteration,
@@ -489,39 +556,67 @@ class FullOrchestrator:
         use_chain = state.get("use_chain", False)
         prev_code = state.get("prev_code", "")
 
-        print("💻 [4/6] 技术实现...")
-        self._emit("builder", "start", iteration)
+        # 必须用「是否含 total_score」判断，不能用 bool(score)：score 为 0 时 bool(0) 为 False，会导致 regen_attempts 不递增、Critic 低分路径无限重生。
+        cd0 = state.get("critic") or {}
+        is_regen = isinstance(cd0, dict) and "total_score" in cd0
+        regen_count = state.get("regen_attempts", 0) + (1 if is_regen else 0)
+
+        label = '[重生]' if is_regen else '[4/6]'
+        suffix = '（评审反馈驱动）' if is_regen else ''
+        print(f"💻 {label} 技术实现{suffix}...")
+        self._emit("builder", "regen" if is_regen else "start", iteration)
+
+        critic_block = ""
+        if is_regen:
+            cd = state.get("critic", {})
+            critic_block = f"""
+【上一轮评审反馈 — 本次必须针对性改进】
+评分：{cd.get('total_score', 'N/A')}/10
+结论：{cd.get('conclusion', '')}
+改进建议：{'；'.join(cd.get('suggestions', []))}
+请大幅提升视觉复杂度与艺术性，直接回应以上每条建议。不要输出与上一轮相同的代码。"""
+
+        technique = result3.get('rendering_technique', '粒子或几何体')
 
         prompt = f"""编写基于 Three.js 的生成艺术代码。
 
-视觉：{result3.get('visual_style_summary', '')}
+视觉风格：{result3.get('visual_style_summary', '')}
+概念：{result1.get('concept', '')}
 
-【严格技术规范 - 必须遵守】
-1. 前端已引入 `THREE`，请直接使用（无需 import）。
-2. 必须将生成的 renderer 的 canvas 插入到指定的容器中：`document.getElementById('canvas-container').appendChild(renderer.domElement);`
-3. 必须包含基础要素：`Scene`, `PerspectiveCamera`, `WebGLRenderer`。
-4. 必须有 `animate()` 循环，内部必须调用 `requestAnimationFrame(animate);` 和 `renderer.render(scene, camera);`。
-5. 监听窗口调整事件以更新宽高比。
-6. 生成的代码必须是纯 JavaScript 代码，绝不能包含 ```javascript 等 Markdown 标签或 <script> 标签。
-7. 彻底封杀外部贴图：绝对禁止使用 `CubeTextureLoader` 或 `TextureLoader` 加载任何现实世界的网络图片/环境图！
-8. 艺术性与复杂度（**展陈辨识度**）：结合前面指定的渲染技术（{result3.get('rendering_technique', '粒子或几何体')}），用 `THREE.InstancedMesh`、`THREE.Points`、`THREE.LineSegments` 等实现**清晰可辨的形式**；避免「泛用旋转粒子球」式惰性设计——落实调色板（多点光色温、`material.color`/`emissive`/`metalness`）、群体相位错频与相机慢遥，使**远观**也能感知本轮独特气质。
-9. 零外部依赖：绝对禁止使用 `GLTFLoader`, `FontLoader` 等任何外部资源加载器！所有视觉必须纯通过数学和代码（Procedural）生成。
-10. 禁用附加库与交互输入：绝对禁止使用 `THREE.OrbitControls`、`EffectComposer` 等需要额外引入的扩展库；同时**禁止任何用户交互输入逻辑**（如 `mousemove`、`pointermove`、`touch*`、`wheel`、`keydown`）。作品必须是纯自动演化播放。
-11. 性能与安全（硬性约束）：**全程可流畅 60fps 优先**。`THREE.Points` 总粒子数必须 <= 4000；`InstancedMesh` 单个 mesh 实例数必须 <= 1200，且若存在多个 InstancedMesh，**全部实例数之和**必须 <= 2500。禁止在同一个作品里同时使用多种"海量实例"（例如 3 组 InstancedMesh 各 1200 + 5000 点云）。默认单场景总 draw 压力越小越好。
-12. 绝对禁用 ShaderMaterial：为了防止 GLSL 编译报错，**绝对禁止**使用 `ShaderMaterial`、`RawShaderMaterial` 或编写任何自定义着色器代码！所有材质必须使用 Three.js 自带的内置材质（如 `MeshPhysicalMaterial`, `MeshStandardMaterial`, `PointsMaterial` 等），顶点动画必须在 JS 的 animate 循环中通过修改 BufferGeometry 计算！
-13. 容错与兼容性：运行环境为 Three.js r128。为防止 `Cannot read properties of undefined` 报错，请优先操作 `material.color` 或 `material.emissive`。如果修改高级材质属性（如 `sheen`, `clearcoat`），必须在更新前进行非空安全检查（如 `if (material.sheen) {{ ... }}`）。
-14. 颜色赋值规范：绝对不能直接给颜色属性赋值数字（例如 `material.color = 0xff0000` 会导致 `uniform3fv` 崩溃报错）。必须使用 `material.color.setHex(0xff0000)` 或 `material.color.setHSL(...)`。**特别警告：在 r128 版本中，MeshPhysicalMaterial 的 `sheen` 属性必须是一个 `THREE.Color` 对象！** 绝对不能写成 `sheen: 1.0` 这种数字，否则会引发 `uniform3fv` 的致命报错。r128 没有 `sheenColor` 属性，请直接使用 `sheen: new THREE.Color(...)`。**另：r128 的 MeshPhysicalMaterial 没有 `thickness` 属性**（传入会在控制台报「is not a property」）；需要半透明/折射感时请只用 `transmission`、`opacity`、`ior` 等已支持字段，**禁止**写 `thickness:`。
-15. 废弃 API 拦截：运行环境为 Three.js r128，该版本已完全移除 `Geometry` 类，只保留 `BufferGeometry`。绝对禁止使用 `new THREE.Geometry()`、`THREE.Face3` 或 `new THREE.BufferGeometry().fromGeometry()` 等废弃 API，否则会引发 `fromGeometry is not a function` 错误！请直接使用 `THREE.BufferGeometry`，并通过设置 `position` 等属性 (`setAttribute('position', new THREE.Float32BufferAttribute(..., 3))`) 来创建自定义几何体，或者直接使用内置的几何体（如 `THREE.SphereGeometry`, `THREE.BoxGeometry` 等）。
-16. **严格语法与长度警告**：为了避免大模型输出被截断导致 `Unexpected end of input` 的语法错误，**所有模型的数据点（如顶点、颜色、向量）必须通过 `for` 或 `while` 循环配合 `Math.sin`/`Math.random` 算法进行程序化生成（Procedural generation）**！绝对禁止在代码中硬编码任何超长的大型数组（如 `[1.0, 2.0, 0.5, ... 几千个数字]`）！这会导致代码断头崩溃。确保所有的括号和逗号完美匹配。
-17. **动画呼吸感与时间层次**：代码必须包含**至少两层不同速率**的连续运动——① 快层（2–8 秒周期）：几何体自转、粒子相位偏移、颜色脉冲或 emissive 闪烁；② 慢层（20–60 秒周期）：相机缓慢轨道漂移（如 `camera.position.x = R * Math.cos(time * 0.05)`）、全局色温缓移（修改灯光 `.color.setHSL(...)` ）、或雾密度吐纳。让不同停留时长的观众都能感知到变化。
-18. **画面亮度与可读性**：作品在展陈大屏上须保持**足够的视觉亮度**——设置 `renderer.toneMapping = THREE.ACESFilmicToneMapping` 和 `renderer.toneMappingExposure = 1.2`（或更高，视场景而定）；场景中至少有一盏 `AmbientLight` 强度 >= 0.3 和一盏方向/点光强度 >= 0.8；`scene.background` 避免使用接近纯黑（`#000`~`#0a0a0a`）的颜色，推荐 HSL 中 L >= 8% 的深色调。
-{_technique_seed(result3.get('rendering_technique', ''))}
+【创意与艺术性 — 最高优先级】
+1. 本轮渲染技术：「{technique}」。用 InstancedMesh / Points / LineSegments / BufferGeometry 等实现**清晰可辨的独特形式**；**严禁**「泛用旋转粒子球」或「球面散点+连线」等惰性套路。落实调色板（多点光色温、material.color / emissive / metalness）、群体相位错频与相机慢遥，使**远观**也能感知本轮独特气质。
+2. **动画呼吸感**（⚠️ 最常见致命错误：速度常数太小导致画面看似完全静止）：
+   设 `const t = performance.now() * 0.001`（单位：秒），则：
+   ① 快层（周期 2–8 s，speed 系数 `0.8 ~ 3.0`）：如 `Math.sin(t * 1.2 + phase)`、`Math.cos(t * 2.5)`。用于几何自转、emissive 脉冲、粒子色彩闪烁。
+   ② 慢层（周期 30–90 s，speed 系数 `0.02 ~ 0.2`）：如 `camera.position.x = R * Math.cos(t * 0.07)`。用于相机漂移、全局色温缓移、雾密度呼吸。
+   **校验公式**：周期 T = 2π / speed ≈ 6.28 / speed。speed=0.001 → T=6280 秒 ≈ **永远看不到变化**。**任何动画参数 speed < 0.01 都是错误的**——肉眼完全无法感知。相机轨道 speed 推荐 `0.04–0.12`，实例运动 speed 推荐 `0.5–2.0`。
+3. **画面亮度**：`renderer.toneMapping = THREE.ACESFilmicToneMapping`，`toneMappingExposure >= 1.2`；至少一盏 AmbientLight 强度 >= 0.3 + 一盏方向/点光强度 >= 0.8；`scene.background` 避免纯黑，推荐 HSL 中 L >= 8%。
+4. **追求结构复杂度与前卫感**：多层叠加、空间编织、参数曲线缠绕、分形细分、拓扑变形、吸引子轨迹等。让代码本身成为算法艺术品，不是技术 demo。
+5. **多层视觉系统**：场景中至少 2 种不同几何体类型（如 InstancedMesh + Points、Mesh + LineSegments、大 Mesh + 围绕粒子群等），且各层使用**不同材质参数与色相**。严禁全场只有一个孤零零的单色物体——即使概念是"极简"，也需至少有主体 + 背景粒子/线条/光晕等辅助层。
+6. **色彩动态**：animate 中必须有至少一处 `.color.setHSL()` 或 `.emissive.setHSL()` 随时间变化（哪怕幅度极小如 hue ±0.02）。纯单色静态着色 = 失败。
+{critic_block}{_technique_seed(technique)}
 {_build_code_inherit_block(use_chain, prev_code)}
 
-【重要输出格式】
-为了避免 JSON 解析崩溃，请**绝对不要**输出 JSON 格式。
-请直接将完整的 Three.js 代码写在 ```javascript 和 ``` 之间。
-代码简洁可运行即可。"""
+【技术规范（精简）】
+- 已引入 THREE（r128），直接使用。renderer.domElement 插入 `getElementById('canvas-container')`。
+- 必须有 Scene + PerspectiveCamera + WebGLRenderer + animate()（含 requestAnimationFrame + renderer.render）+ resize 监听。
+- 输出纯 JavaScript，不含 HTML / Markdown / `<script>` 标签。
+- 零外部依赖：禁止 OrbitControls、任何 Loader（GLTF/Font/Texture/Cube）、EffectComposer。
+- 禁止用户交互（mousemove / pointermove / touch / wheel / keydown），纯自动演化。
+- 所有数据**程序化生成**（for / while + Math），禁止硬编码超长数组。
+
+【性能上限】
+- Points 粒子 ≤ 4000；单 InstancedMesh ≤ 1200，全部 InstancedMesh 合计 ≤ 2500。
+- 禁止同时叠加多种「海量实例」系统。
+
+【r128 兼容（精简）】
+- 禁止 ShaderMaterial / RawShaderMaterial / 自定义 GLSL，只用内置材质，顶点动画在 JS animate 循环中计算。
+- 禁止 THREE.Geometry / Face3 / fromGeometry()，只用 BufferGeometry + setAttribute。
+- material.color 用 `.setHex()` / `.set()`，不可直接赋数字；MeshPhysicalMaterial 的 sheen 必须是 `THREE.Color`，禁止 thickness 属性。
+- 修改 sheen / clearcoat 等高级属性前先做非空判断（`if (material.sheen) {{ ... }}`）。
+
+【输出格式】
+不要输出 JSON。将完整 Three.js 代码写在 ```javascript 和 ``` 之间。"""
 
         raw = self._llm_call(prompt, code_mode=True)
         extracted_code = self._extract_js_code(raw)
@@ -532,7 +627,7 @@ class FullOrchestrator:
         print(f"   ✓ 代码已生成 ({len(extracted_code)} 字符)")
         self._update_log(iteration, state.get("director"), state.get("narrative"), result3, result)
         self._emit("builder", "done", iteration, f"Code generated ({len(extracted_code)} chars)")
-        return {"builder": result}
+        return {"builder": result, "regen_attempts": regen_count, "syntax_valid": False, "syntax_error": "", "fix_attempts": 0}
 
     def _node_reviewer(self, state: PipelineState) -> dict:
         iteration = state["iteration"]
@@ -541,31 +636,33 @@ class FullOrchestrator:
         print("🔬 [5/6] 代码审查...")
         self._emit("reviewer", "start", iteration)
 
-        prompt = f"""严格审查并修复前一位技术工程师生成的 Three.js 代码，必须保证生成的 WebGL 作品完美可运行，绝不崩溃！
-请务必排查以下常见致命错误：
-1. [Canvas容器]: 确保 renderer 的 domElement 被正确添加到了 id 为 'canvas-container' 的 DOM 元素中。
-2. [基础要素]: 确保 Scene, PerspectiveCamera, WebGLRenderer 都被正确初始化。
-3. [动画循环]: 确保 animate() 中调用了 requestAnimationFrame 和 renderer.render()。
-4. [变量作用域]: 确保所有必要的变量在正确的作用域内声明，不要在初始化函数内被局部隐藏。
-5. [语法污染]: 检查代码中是否混入了 `<canvas>`、`<script>` 标签或 ```javascript 等 Markdown 语法！如果包含，必须彻底删除。
-6. [未引入依赖崩溃]: 严查代码中是否使用了 `THREE.OrbitControls` 或任何 `Loader` (GLTF/Font/Texture)。如果发现，必须立即删除相关代码，改为纯自动播放逻辑，防止 ReferenceError！
-6.1 [交互禁用]: 严查是否存在任何交互监听（`mousemove`、`pointermove`、`touchstart/touchmove`、`wheel`、`keydown` 等）。如果有，必须全部移除，确保 evolution 页面无交互依赖。
-7. [着色器崩溃拦截]: 严查代码中是否使用了 `THREE.ShaderMaterial` 或任何自定义 GLSL 字符串！如果有，必须立即用 `THREE.MeshStandardMaterial` 或 `THREE.PointsMaterial` 等内置材质替换掉，将顶点动画逻辑移至 JS 循环中，彻底杜绝 WebGL 编译错误！
-8. [Undefined 调用拦截]: 严查 `animate` 循环中是否对可能为 `undefined` 的属性调用了方法。例如 `material.sheen.setHSL()` 在 `sheen` 尚未初始化时会报错。必须为其增加存在性判断（例如 `if (mesh.material.sheen) {{ ... }}`），或将其替换为更安全的基础属性，彻底消除 TypeError！
-9. [uniform3fv 崩溃拦截]: 严查所有对材质颜色的赋值！绝对不允许出现 `material.color = 数字` 的写法，如果有，必须将其修复为 `material.color.setHex(数字)` 或 `.set(数字)`。**特别警告**：严查 `MeshPhysicalMaterial` 中的 `sheen`，在 r128 中 `sheen` 必须是 `THREE.Color`，如果发现写了 `sheen: 数字`，必须立即将其改为 `sheen: new THREE.Color(数字)`，并将所有的 `sheenColor` 也修正为 `sheen`！否则会引发 `uniform3fv` 致命崩溃！**并删除**所有 `MeshPhysicalMaterial` 构造/字面量中的 `thickness` 字段（r128 无此属性，会报警）；可略调高 `transmission` 补偿观感。
-10. [废弃 API 崩溃拦截]: 严查代码中是否使用了 `THREE.Geometry` 或调用了 `.fromGeometry()`！Three.js r128 已经删除了 `Geometry` 和 `Face3`，必须将其彻底替换为直接操作 `THREE.BufferGeometry` 并使用 `setAttribute('position', new THREE.Float32BufferAttribute(..., 3))`，否则会导致 `TypeError: ...fromGeometry is not a function` 致命崩溃！
-11. [SyntaxError 与长度拦截]: 通读生成的 JS 代码。**如果代码末尾缺少闭合的括号（`}}`, `)`）或在中间被生硬截断，直接引发了 `Uncaught SyntaxError: Unexpected end of input`，你必须在修复时补充完整的逻辑循环并封口代码块**。如果是因为前人硬编码了过长的数据数组（`[...千字...]`），请直接把数组换成简短的 `for` 循环程序化生成逻辑！
-12. 仔细排查遗漏的逗号、未定义的变量（如 `let`/`const`）、和拼写错误（如 `Unexpected identifier`）。确保 `animate` 闭环完整调用 `requestAnimationFrame`。
-13. 性能复核：检查所有 `POINTS`/`SLICE_COUNT`/`fragmentCount`/`instanceCount`/`particleCount` 等，必须满足：粒子 <=4000、Instanced 合计 <=2500；超标则**删减数量或去掉一整类效果**后再输出。
+        prompt = f"""审查以下 Three.js 代码，**仅修复会导致运行时崩溃的致命错误**。
 
-[生成的代码]
+【核心原则】你是安全网，不是重写者。如果代码能跑，**原样输出，不做任何修改**。
+**绝对不要**：削减粒子/实例数量、简化动画逻辑、移除视觉效果、改变艺术风格或构图。
+**保留所有创意复杂度**——即使代码看起来"太长"或"太复杂"，只要不崩溃就不动。
+
+仅检查以下项（存在才修，不存在跳过）：
+1. renderer.domElement 未添加到 'canvas-container' → 补上
+2. 缺少 animate() / requestAnimationFrame / renderer.render → 补上
+3. 使用了 OrbitControls / GLTFLoader 等未引入依赖 → 删除相关代码
+4. 使用了 ShaderMaterial / 自定义 GLSL → 替换为内置材质，将动画移至 JS 循环
+5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute
+6. material.color = 数字 → .setHex()；sheen 必须是 THREE.Color；删除 thickness
+7. 混入了 HTML / Markdown / `<script>` 标签 → 删除
+8. 明显语法错误：括号不匹配、变量未声明、代码被截断 → 补全闭合
+9. 交互监听（mousemove / pointermove / touch / wheel / keydown）→ 移除
+10. undefined 调用：对可能不存在的属性（sheen, clearcoat 等）调用方法前加非空判断
+11. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
+
+如果**没有发现任何崩溃问题**，直接输出原始代码不做任何修改。
+
+[待审查代码]
 {result4.get('threejs_code', '')}
 
-【重要输出格式】
-为了避免 JSON 解析崩溃，请**绝对不要**输出 JSON 格式。
-请直接按照以下格式输出：
-1. 你的审查意见（直接用文本输出）。
-2. 修复后的代码，必须用 ```javascript 和 ``` 包裹。
+【输出格式】
+1. 审查结论（一句话：无问题 / 发现 N 个致命问题已修复）。
+2. 代码用 ```javascript 和 ``` 包裹（可以是原始代码的完整复制）。
 """
 
         raw = self._llm_call(prompt, code_mode=True)
@@ -579,9 +676,11 @@ class FullOrchestrator:
             fixed_code = result4.get('threejs_code', '')
             comments = raw.strip()
 
+        fixed_code = _clamp_animation_speeds_in_js(fixed_code)
         result = {"threejs_code": fixed_code, "review_comments": comments}
         print("   ✓ 审查完毕")
-        self._emit("reviewer", "done", iteration, "Code review complete")
+        review_brief = (comments or "")[:100].replace('\n', ' ')
+        self._emit("reviewer", "done", iteration, review_brief or "Code review complete")
         self._update_log(
             iteration,
             state.get("director"), state.get("narrative"), state.get("visual"),
@@ -593,14 +692,33 @@ class FullOrchestrator:
         iteration = state["iteration"]
         result1 = state.get("director", {})
         result3 = state.get("visual", {})
+        code = state.get("reviewer", {}).get("threejs_code", "") or state.get("builder", {}).get("threejs_code", "")
+
+        code_len = len(code)
+        has_setHSL = ".setHSL(" in code
+        geo_types = sum(["THREE.Points" in code or "Points(" in code,
+                         "InstancedMesh" in code,
+                         "LineSegments" in code or "Line(" in code,
+                         "new THREE.Mesh" in code])
+
+        code_summary = f"代码统计：{code_len} 字符 | 几何体类型数：{geo_types} | 色彩动态(.setHSL)：{has_setHSL}"
 
         print("🔍 [6/6] 艺术评审...")
         self._emit("critic", "start", iteration)
 
-        prompt = f"""评审本次迭代作品（请关注**形式是否独特**、是否摆脱俗套 demo 感，而非一味堆粒子数）。
+        prompt = f"""评审本次迭代作品。请**同时**关注：
+1. 形式是否独特，是否摆脱俗套 demo 感
+2. 代码实现是否真正有多层视觉、动态色彩、可感知的动画速度
 
-概念：{result1.get('concept', '')[:50]}
+概念：{result1.get('concept', '')[:80]}
 视觉：{result3.get('visual_style_summary', '')}
+{code_summary}
+
+评分参考：
+- 9-10 分：形式前卫、动画丰富、色彩动态、多层视觉、即可展陈
+- 7-8 分：概念好但实现有缺陷（如动画太慢、单色、单层几何体）
+- 5-6 分：套路化 demo 或实现严重偏离概念
+- **publish_ready=true 仅在代码实际实现了多层、动态、可感知动画时才给**
 
 请输出 JSON 格式：
 ```json
@@ -691,6 +809,7 @@ class FullOrchestrator:
             "syntax_valid": False,
             "syntax_error": "",
             "fix_attempts": 0,
+            "regen_attempts": 0,
         }
 
         final = self._graph.invoke(initial_state)
@@ -799,8 +918,6 @@ window.addEventListener('resize', () => {
         print(f"   ✓ 已更新 evolution.html")
         print(f"   🎉 迭代 {iteration} 完成!\n")
 
-    # ---- iteration log (unchanged) ----
-
     def _update_log(self, iteration, result1=None, result2=None, result3=None, result4=None, result5=None, result6=None):
         log_file = self.project_dir / "iteration_log.json"
 
@@ -836,7 +953,8 @@ window.addEventListener('resize', () => {
             else:
                 logs.append(log_entry)
 
-            logs = logs[-1:] if logs else []
+            if _ITERATION_LOG_MAX_ENTRIES > 0 and len(logs) > _ITERATION_LOG_MAX_ENTRIES:
+                logs = logs[-_ITERATION_LOG_MAX_ENTRIES:]
             _atomic_write_json(log_file, logs)
 
 
