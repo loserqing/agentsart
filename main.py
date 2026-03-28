@@ -41,8 +41,6 @@ REPO_ROOT = Path(__file__).resolve().parent
 # Load env
 load_dotenv(REPO_ROOT / ".env")
 
-# Set CREWAI_STORAGE_DIR for database files
-os.environ["CREWAI_STORAGE_DIR"] = str(REPO_ROOT / ".crewai_storage")
 
 def _default_global_state(boot_at: float | None = None) -> dict:
     """头像分析 + 编排节拍；boot_at 用于 startup 与 lifespan 重置时对齐 timestamp / server_boot_at。"""
@@ -170,8 +168,7 @@ def orchestrator_loop():
     print("🤖 AgentsArt 多智能体自动迭代服务启动")
     print("="*60)
 
-    # CrewAI 多智能体：与 orchestrator_full 一致，优先读 .env 的 DEFAULT_MODEL（gemini/… 前缀视你安装的 litellm/crewai 支持而定）
-    model_name = os.getenv("DEFAULT_MODEL", "gemini/gemini-flash-latest")
+    model_name = os.getenv("DEFAULT_MODEL", "gemini/gemini-2.0-flash")
     orchestrator = FullOrchestrator(model=model_name)
     print(f"📎 编排器 LLM：{model_name}")
 

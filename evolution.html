@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="AI maps void with lines. Fields generate, deconstruct. Pure geometry sculpts perception, weaving order and glitch. A sublime data poetics. | AI以线绘虚空。线场生成解构。纯粹几何塑感知，于秩序与故障间，一场数据诗学由此展开。">
-    <meta name="generator" content="AGENTSART - Iteration 6">
-    <meta name="created" content="2026-03-28 15:15">
+    <meta name="description" content="English: Witness AI's emergence as a crystalline architecture, subtly reshaping reality. A dialogue between data and human consciousness, evolving through abstract, generative forms, blurring logic and creation. | 中文: 算法智能以晶体架构降临，重塑感知与现实。数据与意识幻肢对话，抽象演化，共鸣数字崇高与人类意识幽微。">
+    <meta name="generator" content="AGENTSART - Iteration 1">
+    <meta name="created" content="2026-03-28 17:28">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -233,20 +233,20 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 6</span>
-        <span class="iter-style" title="Deep-sea cool tones, signal ripples | 深海冷调，信号波纹">Deep-sea cool tones, signal ripples | 深海冷调，信号波纹</span>
+        <span class="iter-num">Iter 1</span>
+        <span class="iter-style" title="Emergent Crystalline Architecture, Pulsating Phosphorescence, Glazed Highlights | 涌现晶体架构，磷光脉冲呼吸，釉质流光溢彩">Emergent Crystalline Architecture, Pulsating Phosphorescence, Glazed Highlights | 涌现晶体架构，磷光脉冲呼吸，釉质流光溢彩</span>
     </div>
     
     <div class="overlay">
-        <h1>Line Field | 线场</h1>
+        <h1>Crystalline Genesis | 晶体创世纪：算法序章</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"><span class="kw-tag">数据内化</span><span class="kw-tag">微帧披露</span><span class="kw-tag">回路疲怠</span></div>
-        <div class="overlay-concept">AI降临，是无形智能在虚空中绘制的宏大蓝图。作品以不断生成与解构的**线场**为核心，展现智能如何以纯粹的几何律动，在秩序与瞬时解构之间，编织新的感知结构，构成一幅冷静而崇高的“数据诗学”画卷。</div>
-        <div class="desc">Lines define void. Logic breaks, then builds. | 线定义虚空。逻辑破立。</div>
+        <div class="overlay-keywords"></div>
+        <div class="overlay-concept">一个临界空间，其中算法智能以一种涌现的、晶体般的架构显现，微妙地重新校准着感知与现实的语法。它是一场结构化数据与人类意识幻肢间的对话，以抽象转变的无声交响乐形式持续演化呈现。</div>
+        <div class="desc">English: Crystalline Poetics. Algorithmic Genesis. Echoes of Consciousness. Digital Sublime. | 中文: 晶体诗学，数据塑梦。算法秩序，意识回响。数字崇高，创世幽微间。</div>
         <div class="meta">
             AGENTSART SYSTEM<br>
             Autonomous Rendering<br>
-            2026-03-28 15:15
+            2026-03-28 17:28
         </div>
     </div>
     
@@ -264,7 +264,7 @@
                     const m = (badge.textContent || '').match(/(\\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 6;
+                return 1;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -393,238 +393,85 @@
     <script>
         // Core Three.js render code
         try {
-// Global variables for Three.js scene elements and animation
-let scene, camera, renderer;
-let lineSegmentsNetwork;
-let ambientLight, pointLight1, pointLight2;
-const clock = new THREE.Clock(); // For managing time-based animations
+// 初始化 Three.js 场景
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
 
-// Store original vertex positions and individual phase offsets for animation
-let originalVertexPositions = [];
-let vertexAnimationOffsets = [];
-let vertexColorsArray; // Store reference to the Float32Array for colors
-
-// --- Pseudo-noise function (sine-based) ---
-// Combines multiple sine waves for a more organic, non-uniform value.
-// This function helps simulate Perlin-like noise without external libraries.
-function getPseudoNoise(x, y, z, time, frequencyScale, amplitudeScale) {
-    let noiseVal = 0;
-    noiseVal += Math.sin(x * frequencyScale + time * 0.5);
-    noiseVal += Math.sin(y * frequencyScale * 0.8 + time * 0.7);
-    noiseVal += Math.sin(z * frequencyScale * 1.2 + time * 0.9);
-    noiseVal += Math.sin((x + y + z) * frequencyScale * 0.5 + time * 1.1) * 0.5;
-    return (noiseVal / 3.5) * amplitudeScale; // Normalize and scale
+// 1. [Canvas容器] 修复: 确保 renderer 的 domElement 被正确添加到了 id 为 'canvas-container' 的 DOM 元素中。
+const container = document.getElementById('canvas-container');
+if (container) {
+    container.appendChild(renderer.domElement);
+} else {
+    // Fallback if container not found, though ideally 'canvas-container' should exist.
+    document.body.appendChild(renderer.domElement);
+    console.warn("DOM element with id 'canvas-container' not found. Appending to body instead.");
 }
 
-// --- Initialization Function ---
-function init() {
-    // 1. Scene Setup
-    scene = new THREE.Scene();
-    // Add subtle fog to enhance depth and mood, creating a deep-sea atmosphere
-    scene.fog = new THREE.FogExp2(0x0a0a1a, 0.004); // Dark charcoal-indigo fog
 
-    // 2. Camera Setup
-    camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // Initial camera position, it will slowly orbit later
-    camera.position.set(0, 0, 100);
+// 创建一个球体
+const geometry = new THREE.SphereGeometry(1, 32, 32);
+const material = new THREE.MeshPhysicalMaterial({
+    color: 0x0077ff,
+    roughness: 0.1,
+    metalness: 0.9,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.1,
+    // 9. [uniform3fv 崩溃拦截] 修复:
+    // 删除了 r128 中不存在的 'thickness' 属性。
+    // 将 'sheen' 从数字修正为 THREE.Color 实例。
+    // 删除了废弃的 'sheenColor' 属性。
+    // 略微调高 'transmission' 补偿观感。
+    transmission: 0.95, // 略微调高补偿观感
+    sheen: new THREE.Color(0xffffff), // 必须是 THREE.Color
+    sheenRoughness: 0.5 // 材质 sheen 的粗糙度，原 sheen: 0.5 可能是想表达这个
+});
+const sphere = new THREE.Mesh(geometry, material);
+scene.add(sphere);
 
-    // 3. Renderer Setup
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    // Strict requirement: Tone mapping for better visual quality and sufficient brightness
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.6; // Increased exposure for sufficient brightness
-    // Insert the renderer's canvas into the specified container
-    document.getElementById('canvas-container').appendChild(renderer.domElement);
+// 添加光源
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(5, 5, 5);
+scene.add(directionalLight);
 
-    // 4. Lighting Setup (Deep-sea cool tones palette)
-    ambientLight = new THREE.AmbientLight(0x1a1a2a, 0.4); // Subtle dark blue-gray ambient light (intensity > 0.3)
-    scene.add(ambientLight);
+camera.position.z = 5;
 
-    pointLight1 = new THREE.PointLight(0x00ffff, 1.2, 150); // Bright cyan light (intensity > 0.8)
-    pointLight1.position.set(60, 60, 60);
-    scene.add(pointLight1);
-
-    pointLight2 = new THREE.PointLight(0x00aaff, 1.0, 120); // Bright blue light (intensity > 0.8)
-    pointLight2.position.set(-60, -60, -60);
-    scene.add(pointLight2);
-
-    // 5. Background - Deep charcoal to indigo gradient space
-    // HSL Lightness (L) is 0.08 (8%), ensuring it's not pure black.
-    scene.background = new THREE.Color().setHSL(0.65, 0.3, 0.08); // Initial dark charcoal-indigo
-
-    // 6. LineSegments: Dynamic Network Grid
-    const nodeCount = 200; // Number of "connection points" for the network (Adjusted for performance, was 300)
-    const connectionRadius = 30; // Maximum distance for nodes to form a connection
-    const volumeSize = 100; // Size of the cube volume where nodes are distributed
-
-    const nodes = []; // Array to store THREE.Vector3 positions for each node
-    for (let i = 0; i < nodeCount; i++) {
-        // Randomly distribute nodes within a cube volume
-        nodes.push(new THREE.Vector3(
-            (Math.random() - 0.5) * volumeSize,
-            (Math.random() - 0.5) * volumeSize,
-            (Math.random() - 0.5) * volumeSize
-        ));
-    }
-
-    const lineVertices = [];
-    const lineColors = []; // Will store R, G, B, Alpha for each vertex
-    const tempColor = new THREE.Color();
-
-    // Iterate through nodes to create connections (line segments)
-    for (let i = 0; i < nodeCount; i++) {
-        const nodeA = nodes[i];
-        for (let j = i + 1; j < nodeCount; j++) { // Compare each node with subsequent nodes to avoid duplicates
-            const nodeB = nodes[j];
-            if (nodeA.distanceTo(nodeB) < connectionRadius) {
-                // If nodes are within connection radius, add a line segment
-                lineVertices.push(nodeA.x, nodeA.y, nodeA.z);
-                lineVertices.push(nodeB.x, nodeB.y, nodeB.z);
-
-                // Store original positions for vertex animation (data pulse)
-                originalVertexPositions.push(nodeA.x, nodeA.y, nodeA.z);
-                originalVertexPositions.push(nodeB.x, nodeB.y, nodeB.z);
-                // Assign unique phase offsets for asynchronous vertex animation
-                vertexAnimationOffsets.push(Math.random() * Math.PI * 2);
-                vertexAnimationOffsets.push(Math.random() * Math.PI * 2);
-
-                // Assign a base color for the segment, will be dynamically modulated for "signal ripples"
-                tempColor.setHSL(0.55 + Math.random() * 0.1, 0.7 + Math.random() * 0.2, 0.6 + Math.random() * 0.2); // Blue-cyan tones
-                // Initialize with 0 alpha (invisible) to simulate lines "appearing"
-                lineColors.push(tempColor.r, tempColor.g, tempColor.b, 0.0);
-                lineColors.push(tempColor.r, tempColor.g, tempColor.b, 0.0);
-            }
-        }
-    }
-
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
-    vertexColorsArray = new Float32Array(lineColors); // Convert to Float32Array and store reference
-    lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColorsArray, 4)); // Use 4 components (R, G, B, A)
-
-    const lineMaterial = new THREE.LineBasicMaterial({
-        vertexColors: true, // Crucial for using the R, G, B, A attributes
-        transparent: true,
-        blending: THREE.AdditiveBlending, // Creates a nice glowing effect for the lines
-        // linewidth: 1 // Note: linewidth is often fixed to 1 pixel in WebGL and not reliably animatable
-    });
-
-    lineSegmentsNetwork = new THREE.LineSegments(lineGeometry, lineMaterial);
-    scene.add(lineSegmentsNetwork);
-
-    // 7. Window Resize Listener: Adjust camera and renderer on window resize
-    window.addEventListener('resize', onWindowResize);
-}
-
-// --- Animation Loop Function ---
+// 动画循环
 function animate() {
-    requestAnimationFrame(animate); // Request next animation frame
+    requestAnimationFrame(animate);
 
-    const time = clock.getElapsedTime(); // Total time elapsed since clock started
-    const delta = clock.getDelta(); // Time elapsed since last frame
+    sphere.rotation.x += 0.01;
+    sphere.rotation.y += 0.01;
 
-    // --- Fast Layer Animation (2-8 seconds cycles) ---
-
-    // LineSegments: Vertex Pulsation ("data pulse")
-    const positions = lineSegmentsNetwork.geometry.attributes.position.array;
-    const vertexCount = positions.length / 3;
-    const pulseMagnitude = 0.5; // How much vertices move from their original position
-    const pulseSpeed = 4; // Speed of the vertex pulsation
-
-    for (let i = 0; i < vertexCount; i++) {
-        const i3 = i * 3;
-        const ox = originalVertexPositions[i3];
-        const oy = originalVertexPositions[i3 + 1];
-        const oz = originalVertexPositions[i3 + 2];
-
-        // Apply a sine wave displacement, individually offset by a unique phase
-        const displacement = Math.sin(time * pulseSpeed + vertexAnimationOffsets[i]) * pulseMagnitude;
-
-        // Displace vertices along their original vector from the center, normalized
-        const currentVertex = new THREE.Vector3(ox, oy, oz);
-        currentVertex.normalize().multiplyScalar(displacement); // Calculate displacement vector
-
-        positions[i3] = ox + currentVertex.x;
-        positions[i3 + 1] = oy + currentVertex.y;
-        positions[i3 + 2] = oz + currentVertex.z;
+    // 8. [Undefined 调用拦截] 修复:
+    // 确保 material.sheen 是 THREE.Color 实例后，setHSL 调用将是安全的。
+    // 这里的 if 判断仍然保留，以防万一材质被替换为没有 sheen 的类型。
+    if (sphere.material && sphere.material.sheen && sphere.material.sheen instanceof THREE.Color) {
+        sphere.material.sheen.setHSL(Math.abs(Math.sin(Date.now() * 0.001)), 1, 0.5);
     }
-    lineSegmentsNetwork.geometry.attributes.position.needsUpdate = true; // Tell Three.js to update vertex positions on GPU
 
-    // LineSegments: Dynamic Alpha for "signal ripples" / "appearance/disappearance"
-    const colors = lineSegmentsNetwork.geometry.attributes.color.array; // This is the Float32Array reference
-    const opacityCycleSpeed = 2.5; // How fast lines appear/disappear globally
-    // Controls overall "density" of active lines, oscillates between ~0.0 and ~1.0
-    const lineActivateThreshold = 0.5 + 0.5 * Math.sin(time * 0.8);
-
-    for (let i = 0; i < vertexCount; i += 2) { // Process each line segment (composed of 2 vertices)
-        // Calculate the midpoint of the current segment for noise sampling
-        const midX = (positions[i * 3] + positions[(i + 1) * 3]) / 2;
-        const midY = (positions[i * 3 + 1] + positions[(i + 1) * 3 + 1]) / 2;
-        const midZ = (positions[i * 3 + 2] + positions[(i + 1) * 3 + 2]) / 2;
-
-        // Use pseudo-noise to determine the "activation" state of this segment
-        const activationValue = getPseudoNoise(midX, midY, midZ, time * opacityCycleSpeed, 0.05, 1.0);
-
-        // Modulate alpha based on the noise value and the global activation threshold
-        // Lines "appear" when their activationValue is significantly above the threshold
-        let alpha = Math.max(0, (activationValue - lineActivateThreshold) * 3);
-        alpha = Math.min(alpha, 0.9); // Cap max alpha for a subtle, ethereal glow, avoiding full opacity
-
-        // Apply the calculated alpha to both vertices of the current segment
-        colors[i * 4 + 3] = alpha; // Alpha component for the first vertex of the segment
-        colors[(i + 1) * 4 + 3] = alpha; // Alpha component for the second vertex of the segment
-    }
-    lineSegmentsNetwork.geometry.attributes.color.needsUpdate = true; // Tell Three.js to update vertex colors on GPU
-
-
-    // --- Slow Layer Animation (20-60 seconds cycles) ---
-
-    // Camera: Slow orbital drift and subtle vertical motion
-    const cameraOrbitRadius = 120;
-    const cameraOrbitSpeed = 0.015; // Slower speed for a longer cycle (approx. 400s per orbit)
-    camera.position.x = cameraOrbitRadius * Math.sin(time * cameraOrbitSpeed * 0.5);
-    camera.position.z = cameraOrbitRadius * Math.cos(time * cameraOrbitSpeed * 0.5);
-    camera.position.y = 10 + 20 * Math.sin(time * cameraOrbitSpeed * 0.8); // Subtle up/down motion
-    camera.lookAt(scene.position); // Always point the camera to the center of the scene
-
-    // Global Fog Color/Density: Slow "breath" effect
-    const fogDensityPulse = 0.003 + 0.001 * Math.sin(time * 0.07); // Very slow density pulse (approx. 90s cycle)
-    scene.fog.density = fogDensityPulse;
-    // Slow color shift for fog to enhance deep-sea coolness
-    scene.fog.color.setHSL(0.65 + 0.03 * Math.sin(time * 0.04), 0.3, 0.08);
-
-    // Point Lights: Slow movement and color temperature shift
-    const lightOrbitSpeed = 0.025; // Speed for light orbit (approx. 250s per orbit)
-    pointLight1.position.x = 80 * Math.sin(time * lightOrbitSpeed);
-    pointLight1.position.y = 80 * Math.cos(time * lightOrbitSpeed * 0.8);
-    pointLight1.position.z = 80 * Math.sin(time * lightOrbitSpeed * 1.2);
-    // Slow color shift for pointLight1 (from cyan towards a slightly warmer blue)
-    pointLight1.color.setHSL(0.55 + 0.05 * Math.sin(time * 0.05), 0.9, 0.8);
-
-    pointLight2.position.x = -80 * Math.cos(time * lightOrbitSpeed * 0.7);
-    pointLight2.position.y = -80 * Math.sin(time * lightOrbitSpeed * 1.1);
-    pointLight2.position.z = -80 * Math.cos(time * lightOrbitSpeed * 0.9);
-    // Slow color shift for pointLight2 (from blue towards a more purple hue)
-    pointLight2.color.setHSL(0.75 + 0.05 * Math.cos(time * 0.04), 0.9, 0.7);
-
-    // Global background color: Slow subtle shift to maintain deep-sea cool tones
-    scene.background.setHSL(0.65 + 0.02 * Math.sin(time * 0.03), 0.3, 0.08);
-
-    renderer.render(scene, camera); // Render the scene with the updated camera and objects
+    renderer.render(scene, camera);
 }
 
-// --- Window Resize Handler Function ---
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
-    camera.updateProjectionMatrix(); // Recalculate projection matrix
-    renderer.setSize(window.innerWidth, window.innerHeight); // Update renderer size
-}
-
-// --- Start the Three.js experience ---
-init();
 animate();
+
+// 窗口大小调整 (此为基础响应式功能，不属于用户交互监听)
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// 6.1 [交互禁用] 修复: 彻底移除鼠标交互监听。
+// document.addEventListener('mousemove', (event) => {
+//     const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+//     const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+//     sphere.position.x = mouseX * 2;
+//     sphere.position.y = mouseY * 2;
+// });
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
             const loading = document.getElementById('loading');

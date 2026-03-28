@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 google-genai
-crewai
+langgraph
+langchain-google-genai
 backoff
 pydantic
 python-dotenv

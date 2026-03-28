@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 完整版多智能体协作编排器 - 生成可运行的 WebGPU 作品
-支持实时协作页面更新和后台自动迭代
+技术栈：LangGraph (StateGraph) + langchain-google-genai
 """
 
 import os
@@ -11,20 +11,23 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
-from crewai import Agent, Task, Crew
+from typing import TypedDict
 
-# 加载.env
+from dotenv import load_dotenv
+from langgraph.graph import StateGraph, START, END
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
+# --------------- helpers ---------------
+
 def _evolution_chain_from_env() -> bool:
-    """默认 False：每轮独立生成，避免上一代代码/概念叠复杂度拖垮性能。需链式演进时设置 AGENTSART_EVOLUTION_CHAIN=1。"""
     return os.getenv("AGENTSART_EVOLUTION_CHAIN", "").strip().lower() in ("1", "true", "yes")
 
 
 def _atomic_write(path: Path, content: str):
-    """Write file atomically via temp + rename to prevent half-written reads."""
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
@@ -39,7 +42,6 @@ def _atomic_write(path: Path, content: str):
 
 
 def _atomic_write_json(path: Path, data, **kwargs):
-    """Write JSON atomically."""
     _atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2, **kwargs))
 
 
@@ -74,64 +76,82 @@ def _technique_seed(technique: str) -> str:
     return ""
 
 
+def _normalize_model_name(raw: str) -> str:
+    """Strip litellm-style 'gemini/' prefix so langchain-google-genai gets a clean model id."""
+    name = raw.strip()
+    if name.startswith("gemini/"):
+        name = name[len("gemini/"):]
+    return name
+
+
+# --------------- LangGraph state schema ---------------
+
+class PipelineState(TypedDict, total=False):
+    iteration: int
+    face_influence: str
+    creative_keywords: list
+    use_chain: bool
+    prev_concept: str
+    prev_visual: str
+    prev_code: str
+    director: dict
+    narrative: dict
+    visual: dict
+    builder: dict
+    reviewer: dict
+    critic: dict
+
+
+# --------------- orchestrator class ---------------
+
 class FullOrchestrator:
     def __init__(self, project_dir: str = None, model=None):
         self.project_dir = Path(project_dir) if project_dir else Path(__file__).parent.parent
-        llm_model = model if model else os.getenv("DEFAULT_MODEL", "gemini/gemini-1.5-pro")
-        
-        # 创建智能体
-        self.director = Agent(
-            role="创意总监",
-            goal="定义 AI 降临作品的艺术方向与展陈级形式感",
-            backstory="你是一位策展型数字艺术家，熟悉生成艺术史与声像装置，擅长把抽象观念压成可被大屏阅读的形式语言。",
-            verbose=False,
-            llm=llm_model
+        raw_model = model or os.getenv("DEFAULT_MODEL", "gemini/gemini-2.0-flash")
+        self.model_name = _normalize_model_name(raw_model)
+
+        self.llm = ChatGoogleGenerativeAI(
+            model=self.model_name,
+            temperature=0.85,
         )
-        
-        self.narrative = Agent(
-            role="叙事策划",
-            goal="用极简诗性语言为展陈标题与画外小字定调",
-            backstory="你是一位偏展览副标题传统的叙事编辑，短句有力，可中英并置而不口水。",
-            verbose=False,
-            llm=llm_model
+        self.llm_code = ChatGoogleGenerativeAI(
+            model=self.model_name,
+            temperature=0.5,
         )
-        
-        self.visual = Agent(
-            role="视觉设计师",
-            goal="在性能边界内为每轮选定独特的主形态与气质",
-            backstory="你是一位生成艺术与实时图形方向的视觉总监，精通 Three.js 内置材质与几何程序化，不用自定义 shader 也能做出强烈风格。",
-            verbose=False,
-            llm=llm_model
-        )
-        
-        self.builder = Agent(
-            role="技术实现工程师",
-            goal="编写完整的 Three.js 动画代码，生成可运行的视觉效果",
-            backstory="你是一位创意前端开发工程师，精通 Three.js 与 WebGL。你擅长使用 Three.js 创建粒子系统、复杂的 3D 几何体和令人惊叹的材质。你生成的代码始终是完整、可直接运行的。",
-            verbose=False,
-            llm=llm_model
-        )
-        
-        self.reviewer = Agent(
-            role="代码审查工程师",
-            goal="审查并修复 Three.js 代码中的逻辑与语法错误",
-            backstory="你是一位资深的前端架构师。你擅长排查 Three.js 代码中的常见错误（例如忘记将网格添加到 scene、未在 animate 中调用 renderer.render、变量作用域错误等）。你像手术刀一样精准修复报错，确保画面完美渲染。",
-            verbose=False,
-            llm=llm_model
-        )
-        
-        self.critic = Agent(
-            role="艺术评审",
-            goal="对本轮生成艺术作品给出可展陈的评分与明确评审结论",
-            backstory="你是一位资深数字艺术策展人：评分之外，必须用短句写出定论（是否推荐作为展项、核心依据是什么）。",
-            verbose=False,
-            llm=llm_model
-        )
-        
+
         _tpl_path = Path(__file__).parent / "evolution_template.html"
         self.html_template = _tpl_path.read_text(encoding="utf-8")
-    
-    
+
+        self._graph = self._build_graph()
+
+    # ---- graph construction ----
+
+    def _build_graph(self):
+        g = StateGraph(PipelineState)
+        g.add_node("director", self._node_director)
+        g.add_node("narrative", self._node_narrative)
+        g.add_node("visual", self._node_visual)
+        g.add_node("builder", self._node_builder)
+        g.add_node("reviewer", self._node_reviewer)
+        g.add_node("critic", self._node_critic)
+        g.add_edge(START, "director")
+        g.add_edge("director", "narrative")
+        g.add_edge("narrative", "visual")
+        g.add_edge("visual", "builder")
+        g.add_edge("builder", "reviewer")
+        g.add_edge("reviewer", "critic")
+        g.add_edge("critic", END)
+        return g.compile()
+
+    # ---- LLM helper ----
+
+    def _llm_call(self, prompt: str, *, code_mode: bool = False) -> str:
+        llm = self.llm_code if code_mode else self.llm
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        return resp.content or ""
+
+    # ---- JSON / code parsers (unchanged) ----
+
     def _parse_json(self, text: str) -> dict:
         match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
         if match:
@@ -139,7 +159,7 @@ class FullOrchestrator:
                 return json.loads(match.group(1))
             except Exception as e:
                 print(f"\n   [警告] JSON 代码块解析失败: {e}")
-                
+
         start = text.find('{')
         end = text.rfind('}') + 1
         if start >= 0 and end > start:
@@ -147,8 +167,7 @@ class FullOrchestrator:
                 return json.loads(text[start:end])
             except Exception as e:
                 print(f"\n   [警告] 提取花括号内容解析失败: {e}")
-                
-        # 紧急容错：如果 JSON 解析彻底失败，但我们找到了 JS 代码块，尝试作为代码返回
+
         js_match = re.search(r'```(?:javascript|js)\s*(.*?)\s*```', text, re.DOTALL)
         if js_match:
             print("\n   [恢复] JSON 解析失败，但成功从 Markdown 中提取到了代码块")
@@ -156,75 +175,33 @@ class FullOrchestrator:
 
         print(f"\n   [警告] AI 没有返回合法的 JSON！截取前 100 个字符: {text[:100]}...")
         return {}
-    
+
     def _extract_js_code(self, text: str) -> str:
-        """从大模型输出中安全提取 JavaScript 代码块，彻底杜绝提取出中文/纯文本"""
-        # 1. 优先提取带 javascript/js 标签的代码块 (强制要求换行符，避免内联匹配)
         match = re.search(r'```(?:javascript|js)\s*\n(.*?)\n```', text, re.DOTALL)
-        if match: return match.group(1).strip()
-        
-        # 2. 尝试提取没有任何语言标记的通用代码块
+        if match:
+            return match.group(1).strip()
         matches = re.finditer(r'```\s*\n(.*?)\n```', text, re.DOTALL)
         for m in matches:
             content = m.group(1).strip()
-            # 简单校验，确保提取出来的是代码而不是普通引用文本
             if "THREE." in content or "requestAnimationFrame" in content:
                 return content
-                
-        # 3. 应对 Token 截断：带标签但未闭合的块 (必须带换行，且包含核心关键字)
         match = re.search(r'```(?:javascript|js)\s*\n(.*)', text, re.DOTALL)
         if match:
             content = match.group(1).strip()
             if "THREE." in content or "requestAnimationFrame" in content:
                 return content
-        
         return ""
 
-    def run(self, iteration: int = None, face_influence: str = None, creative_keywords: list = None):
-        """运行单次迭代"""
-        if iteration is None:
-            # 读取 state.json 获取下一次迭代号
-            state_file = self.project_dir / "state.json"
-            if state_file.exists():
-                with open(state_file, "r", encoding="utf-8") as f:
-                    state = json.load(f)
-                iteration = state.get("iteration", 0) + 1
-            else:
-                iteration = 1
-        
-        print(f"\n{'='*60}")
-        print(f"🎨 第 {iteration} 次迭代 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"{'='*60}\n")
-        
-        # 获取上一代数据用于迭代进化
-        prev_data = {}
-        if iteration > 1:
-            log_file = self.project_dir / "iteration_log.json"
-            if log_file.exists():
-                try:
-                    with open(log_file, "r", encoding="utf-8") as f:
-                        logs = json.load(f)
-                        if logs:
-                            prev_data = logs[-1]
-                except Exception:
-                    pass
-        
-        use_chain = _evolution_chain_from_env() and iteration > 1
-        if iteration > 1 and not use_chain:
-            print("   ℹ 生成策略：独立成章（未设置 AGENTSART_EVOLUTION_CHAIN=1，不继承上一代以控制性能）")
+    # ---- graph nodes (each receives full state, returns partial update) ----
 
-        prev_concept = prev_data.get("director", {}).get("concept", "无（这是初代）")
-        prev_visual = prev_data.get("visual", {}).get("visual_style_summary", "无（这是初代）")
-        prev_code = prev_data.get("builder", {}).get("threejs_code", "无")
-        if not use_chain:
-            prev_concept = "（无：本轮独立生成）"
-            prev_visual = "（无：本轮独立生成）"
-            prev_code = ""
+    def _node_director(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        use_chain = state.get("use_chain", False)
+        face_influence = state.get("face_influence", "")
+        prev_concept = state.get("prev_concept", "")
 
-        # 1. 创意总监
         print("🎬 [1/6] 创意总监...")
-        
-        influence_prompt = ""
+
         if face_influence:
             influence_prompt = f"""
 【外部观察者 / 现场观众（重要！）】
@@ -258,8 +235,7 @@ class FullOrchestrator:
 只需回应本迭代编号与主题，不要假设存在上一代作品。
 """
 
-        task1 = Task(
-            description=f"""定义第{iteration}次迭代的艺术方向。
+        prompt = f"""定义第{iteration}次迭代的艺术方向。
 
 主题："AI 降临对人世的影响"
 【核心要求】：必须是高度抽象（Abstract）、结构复杂（Complex）且极具前卫艺术感的表达！绝对不要具象化或任何现实主义的场景。
@@ -274,21 +250,20 @@ class FullOrchestrator:
     "theme_focus": "主题焦点（可含形式气质关键词）",
     "visual_requirements": ["要求 1（建议含主形态倾向）", "要求 2", "要求 3"]
 }}
-```""",
-            agent=self.director,
-            expected_output="JSON"
-        )
-        crew1 = Crew(agents=[self.director], tasks=[task1], verbose=False)
-        result1 = self._parse_json(str(crew1.kickoff()))
-        print(f"   ✓ 概念：{result1.get('concept', '')[:50]}...")
-        
-        # 增量记录日志
-        self._update_log(iteration, result1)
-        
-        # 2. 叙事策划
+```"""
+
+        result = self._parse_json(self._llm_call(prompt))
+        print(f"   ✓ 概念：{result.get('concept', '')[:50]}...")
+        self._update_log(iteration, result)
+        return {"director": result}
+
+    def _node_narrative(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        result1 = state.get("director", {})
+
         print("📖 [2/6] 叙事策划...")
-        task2 = Task(
-            description=f"""基于以下创意方向构建叙事（偏**展陈大屏**：标题远看可读，小字有诗意）：
+
+        prompt = f"""基于以下创意方向构建叙事（偏**展陈大屏**：标题远看可读，小字有诗意）：
 创意概念：{result1.get('concept', '')}
 主题焦点：{result1.get('theme_focus', '')}
 
@@ -299,17 +274,22 @@ class FullOrchestrator:
     "description": "English description | 中文描述（各约 40 字内；可一格一词概括展陈副标）",
     "overlay_text": "English overlay | 中文悬浮文字（如诗行/展览标签，忌口语与说明书腔）"
 }}
-```""",
-            agent=self.narrative,
-            expected_output="JSON"
-        )
-        crew2 = Crew(agents=[self.narrative], tasks=[task2], verbose=False)
-        result2 = self._parse_json(str(crew2.kickoff()))
-        print(f"   ✓ 标题：{result2.get('title', '')}")
-        self._update_log(iteration, result1, result2)
-        
-        # 3. 视觉设计师
+```"""
+
+        result = self._parse_json(self._llm_call(prompt))
+        print(f"   ✓ 标题：{result.get('title', '')}")
+        self._update_log(iteration, result1, result)
+        return {"narrative": result}
+
+    def _node_visual(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        result1 = state.get("director", {})
+        result2 = state.get("narrative", {})
+        use_chain = state.get("use_chain", False)
+        prev_visual = state.get("prev_visual", "")
+
         print("🎨 [3/6] 视觉设计师...")
+
         if use_chain:
             visual_style_line = """2. 要求：表现出极高的视觉复杂度与**可辨识的计算美学**。**不要**每轮停在「旋转粒子球+一两个多面体」的舒适区；每轮在下列方向中做**显性换轨**（仍遵守后续 Builder 的单场景性能上限）：
    - 奇异吸引子或混沌微分方程轨迹；多组曲线在空间中编织「磁带」或年轮
@@ -337,8 +317,7 @@ class FullOrchestrator:
 【独立视觉 · 性能仍优先】仅允许**一条**主形态链路做足时间演化（相位、色相、缓变相机）。禁止 Second 套「海量」系统（例如已 800 实例 InstancedMesh 再叠 3000 Points）；若需点缀，只用**少量**附加线或物体。
 """
 
-        task3 = Task(
-            description=f"""设计视觉语言。
+        prompt = f"""设计视觉语言。
 
 创意概念：{result1.get('concept', '')}
 叙事：{result2.get('title', '')}
@@ -355,19 +334,24 @@ class FullOrchestrator:
     "color_palette": {{"background": ["#0d1b2a", "#1b263b"], "primary": ["#667eea", "#764ba2"], "accent": ["#f093fb"]}},
     "rendering_technique": "指定一种具体的技术手段 (如 InstancedMesh, 线条拓扑, 数学分形, 发光点云等)"
 }}
-```""",
-            agent=self.visual,
-            expected_output="JSON"
-        )
-        crew3 = Crew(agents=[self.visual], tasks=[task3], verbose=False)
-        result3 = self._parse_json(str(crew3.kickoff()))
-        print(f"   ✓ 风格：{result3.get('visual_style_summary', '')}")
-        self._update_log(iteration, result1, result2, result3)
-        
-        # 4. 技术实现 - 生成完整代码
+```"""
+
+        result = self._parse_json(self._llm_call(prompt))
+        print(f"   ✓ 风格：{result.get('visual_style_summary', '')}")
+        self._update_log(iteration, result1, result2, result)
+        return {"visual": result}
+
+    def _node_builder(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        result1 = state.get("director", {})
+        result2 = state.get("narrative", {})
+        result3 = state.get("visual", {})
+        use_chain = state.get("use_chain", False)
+        prev_code = state.get("prev_code", "")
+
         print("💻 [4/6] 技术实现...")
-        task4 = Task(
-            description=f"""编写基于 Three.js 的生成艺术代码。
+
+        prompt = f"""编写基于 Three.js 的生成艺术代码。
 
 视觉：{result3.get('visual_style_summary', '')}
 
@@ -382,9 +366,9 @@ class FullOrchestrator:
 8. 艺术性与复杂度（**展陈辨识度**）：结合前面指定的渲染技术（{result3.get('rendering_technique', '粒子或几何体')}），用 `THREE.InstancedMesh`、`THREE.Points`、`THREE.LineSegments` 等实现**清晰可辨的形式**；避免「泛用旋转粒子球」式惰性设计——落实调色板（多点光色温、`material.color`/`emissive`/`metalness`）、群体相位错频与相机慢遥，使**远观**也能感知本轮独特气质。
 9. 零外部依赖：绝对禁止使用 `GLTFLoader`, `FontLoader` 等任何外部资源加载器！所有视觉必须纯通过数学和代码（Procedural）生成。
 10. 禁用附加库与交互输入：绝对禁止使用 `THREE.OrbitControls`、`EffectComposer` 等需要额外引入的扩展库；同时**禁止任何用户交互输入逻辑**（如 `mousemove`、`pointermove`、`touch*`、`wheel`、`keydown`）。作品必须是纯自动演化播放。
-11. 性能与安全（硬性约束）：**全程可流畅 60fps 优先**。`THREE.Points` 总粒子数必须 <= 4000；`InstancedMesh` 单个 mesh 实例数必须 <= 1200，且若存在多个 InstancedMesh，**全部实例数之和**必须 <= 2500。禁止在同一个作品里同时使用多种“海量实例”（例如 3 组 InstancedMesh 各 1200 + 5000 点云）。默认单场景总 draw 压力越小越好。
+11. 性能与安全（硬性约束）：**全程可流畅 60fps 优先**。`THREE.Points` 总粒子数必须 <= 4000；`InstancedMesh` 单个 mesh 实例数必须 <= 1200，且若存在多个 InstancedMesh，**全部实例数之和**必须 <= 2500。禁止在同一个作品里同时使用多种"海量实例"（例如 3 组 InstancedMesh 各 1200 + 5000 点云）。默认单场景总 draw 压力越小越好。
 12. 绝对禁用 ShaderMaterial：为了防止 GLSL 编译报错，**绝对禁止**使用 `ShaderMaterial`、`RawShaderMaterial` 或编写任何自定义着色器代码！所有材质必须使用 Three.js 自带的内置材质（如 `MeshPhysicalMaterial`, `MeshStandardMaterial`, `PointsMaterial` 等），顶点动画必须在 JS 的 animate 循环中通过修改 BufferGeometry 计算！
-13. 容错与兼容性：运行环境为 Three.js r128。为防止 `Cannot read properties of undefined` 报错，请优先操作 `material.color` 或 `material.emissive`。如果修改高级材质属性（如 `sheen`, `clearcoat`），必须在更新前进行非空安全检查（如 `if (material.sheen) { ... }`）。
+13. 容错与兼容性：运行环境为 Three.js r128。为防止 `Cannot read properties of undefined` 报错，请优先操作 `material.color` 或 `material.emissive`。如果修改高级材质属性（如 `sheen`, `clearcoat`），必须在更新前进行非空安全检查（如 `if (material.sheen) {{ ... }}`）。
 14. 颜色赋值规范：绝对不能直接给颜色属性赋值数字（例如 `material.color = 0xff0000` 会导致 `uniform3fv` 崩溃报错）。必须使用 `material.color.setHex(0xff0000)` 或 `material.color.setHSL(...)`。**特别警告：在 r128 版本中，MeshPhysicalMaterial 的 `sheen` 属性必须是一个 `THREE.Color` 对象！** 绝对不能写成 `sheen: 1.0` 这种数字，否则会引发 `uniform3fv` 的致命报错。r128 没有 `sheenColor` 属性，请直接使用 `sheen: new THREE.Color(...)`。**另：r128 的 MeshPhysicalMaterial 没有 `thickness` 属性**（传入会在控制台报「is not a property」）；需要半透明/折射感时请只用 `transmission`、`opacity`、`ior` 等已支持字段，**禁止**写 `thickness:`。
 15. 废弃 API 拦截：运行环境为 Three.js r128，该版本已完全移除 `Geometry` 类，只保留 `BufferGeometry`。绝对禁止使用 `new THREE.Geometry()`、`THREE.Face3` 或 `new THREE.BufferGeometry().fromGeometry()` 等废弃 API，否则会引发 `fromGeometry is not a function` 错误！请直接使用 `THREE.BufferGeometry`，并通过设置 `position` 等属性 (`setAttribute('position', new THREE.Float32BufferAttribute(..., 3))`) 来创建自定义几何体，或者直接使用内置的几何体（如 `THREE.SphereGeometry`, `THREE.BoxGeometry` 等）。
 16. **严格语法与长度警告**：为了避免大模型输出被截断导致 `Unexpected end of input` 的语法错误，**所有模型的数据点（如顶点、颜色、向量）必须通过 `for` 或 `while` 循环配合 `Math.sin`/`Math.random` 算法进行程序化生成（Procedural generation）**！绝对禁止在代码中硬编码任何超长的大型数组（如 `[1.0, 2.0, 0.5, ... 几千个数字]`）！这会导致代码断头崩溃。确保所有的括号和逗号完美匹配。
@@ -396,28 +380,25 @@ class FullOrchestrator:
 【重要输出格式】
 为了避免 JSON 解析崩溃，请**绝对不要**输出 JSON 格式。
 请直接将完整的 Three.js 代码写在 ```javascript 和 ``` 之间。
-代码简洁可运行即可。""",
-            agent=self.builder,
-            expected_output="包含 ```javascript 代码块的 Markdown 文本"
-        )
-        crew4 = Crew(agents=[self.builder], tasks=[task4], verbose=False)
-        output4 = str(crew4.kickoff())
-        
-        extracted_code = self._extract_js_code(output4)
+代码简洁可运行即可。"""
+
+        raw = self._llm_call(prompt, code_mode=True)
+        extracted_code = self._extract_js_code(raw)
         if not extracted_code:
             print("\n   [警告] Builder 未能生成合法的代码块，返回为空")
             extracted_code = ""
-                
-        result4 = {"threejs_code": extracted_code}
-        
-        code_len = len(result4.get('threejs_code', ''))
-        print(f"   ✓ 代码已生成 ({code_len} 字符)")
-        self._update_log(iteration, result1, result2, result3, result4)
-        
-        # 5. 代码审查 (Code Reviewer)
+        result = {"threejs_code": extracted_code}
+        print(f"   ✓ 代码已生成 ({len(extracted_code)} 字符)")
+        self._update_log(iteration, state.get("director"), state.get("narrative"), result3, result)
+        return {"builder": result}
+
+    def _node_reviewer(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        result4 = state.get("builder", {})
+
         print("🔬 [5/6] 代码审查...")
-        task5 = Task(
-            description=f"""严格审查并修复前一位技术工程师生成的 Three.js 代码，必须保证生成的 WebGL 作品完美可运行，绝不崩溃！
+
+        prompt = f"""严格审查并修复前一位技术工程师生成的 Three.js 代码，必须保证生成的 WebGL 作品完美可运行，绝不崩溃！
 请务必排查以下常见致命错误：
 1. [Canvas容器]: 确保 renderer 的 domElement 被正确添加到了 id 为 'canvas-container' 的 DOM 元素中。
 2. [基础要素]: 确保 Scene, PerspectiveCamera, WebGLRenderer 都被正确初始化。
@@ -442,31 +423,36 @@ class FullOrchestrator:
 请直接按照以下格式输出：
 1. 你的审查意见（直接用文本输出）。
 2. 修复后的代码，必须用 ```javascript 和 ``` 包裹。
-""",
-            agent=self.reviewer,
-            expected_output="包含审查意见以及 ```javascript 代码块的 Markdown 文本"
-        )
-        crew5 = Crew(agents=[self.reviewer], tasks=[task5], verbose=False)
-        output5 = str(crew5.kickoff())
-        
-        fixed_code = self._extract_js_code(output5)
+"""
+
+        raw = self._llm_call(prompt, code_mode=True)
+        fixed_code = self._extract_js_code(raw)
         if fixed_code:
-            # 粗略剔除代码块内容，保留纯文本作为审查意见
-            comments = re.sub(r'```.*?```', '', output5, flags=re.DOTALL).strip()
-            if not comments: comments = "代码审查与修复已完成。"
+            comments = re.sub(r'```.*?```', '', raw, flags=re.DOTALL).strip()
+            if not comments:
+                comments = "代码审查与修复已完成。"
         else:
             print("\n   [警告] Reviewer 未返回有效的修复代码，将安全回退使用 Builder 的原始代码")
             fixed_code = result4.get('threejs_code', '')
-            comments = output5.strip()
-                
-        result5 = {"threejs_code": fixed_code, "review_comments": comments}
+            comments = raw.strip()
+
+        result = {"threejs_code": fixed_code, "review_comments": comments}
         print("   ✓ 审查完毕")
-        self._update_log(iteration, result1, result2, result3, result4, result5)
-        
-        # 6. 艺术评审
+        self._update_log(
+            iteration,
+            state.get("director"), state.get("narrative"), state.get("visual"),
+            state.get("builder"), result,
+        )
+        return {"reviewer": result}
+
+    def _node_critic(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        result1 = state.get("director", {})
+        result3 = state.get("visual", {})
+
         print("🔍 [6/6] 艺术评审...")
-        task6 = Task(
-            description=f"""评审本次迭代作品（请关注**形式是否独特**、是否摆脱俗套 demo 感，而非一味堆粒子数）。
+
+        prompt = f"""评审本次迭代作品（请关注**形式是否独特**、是否摆脱俗套 demo 感，而非一味堆粒子数）。
 
 概念：{result1.get('concept', '')[:50]}
 视觉：{result3.get('visual_style_summary', '')}
@@ -481,30 +467,102 @@ class FullOrchestrator:
     "publish_ready": false,
     "next_iteration_focus": "下次迭代重点"
 }}
-```""",
-            agent=self.critic,
-            expected_output="JSON"
-        )
-        crew6 = Crew(agents=[self.critic], tasks=[task6], verbose=False)
-        result6 = self._parse_json(str(crew6.kickoff()))
-        if not (result6.get("conclusion") or "").strip():
-            score_disp = result6.get("total_score", "N/A")
-            result6["conclusion"] = (
+```"""
+
+        result = self._parse_json(self._llm_call(prompt))
+        if not (result.get("conclusion") or "").strip():
+            score_disp = result.get("total_score", "N/A")
+            result["conclusion"] = (
                 f"未返回完整结论文本。当前总分 {score_disp}/10，请结合 strengths、suggestions 理解评审意涵。"
             )
         print(
-            f"   ✓ 评分：{result6.get('total_score', 'N/A')}/10 — "
-            f"{(result6.get('conclusion') or '')[:72]}{'…' if len((result6.get('conclusion') or '')) > 72 else ''}"
+            f"   ✓ 评分：{result.get('total_score', 'N/A')}/10 — "
+            f"{(result.get('conclusion') or '')[:72]}{'…' if len((result.get('conclusion') or '')) > 72 else ''}"
         )
-        self._update_log(iteration, result1, result2, result3, result4, result5, result6)
-        
-        # 6. 生成 HTML
+        self._update_log(
+            iteration,
+            state.get("director"), state.get("narrative"), state.get("visual"),
+            state.get("builder"), state.get("reviewer"), result,
+        )
+        return {"critic": result}
+
+    # ---- public entry point ----
+
+    def run(self, iteration: int = None, face_influence: str = None, creative_keywords: list = None):
+        if iteration is None:
+            state_file = self.project_dir / "state.json"
+            if state_file.exists():
+                with open(state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                iteration = state.get("iteration", 0) + 1
+            else:
+                iteration = 1
+
+        print(f"\n{'='*60}")
+        print(f"🎨 第 {iteration} 次迭代 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}\n")
+
+        prev_data = {}
+        if iteration > 1:
+            log_file = self.project_dir / "iteration_log.json"
+            if log_file.exists():
+                try:
+                    with open(log_file, "r", encoding="utf-8") as f:
+                        logs = json.load(f)
+                        if logs:
+                            prev_data = logs[-1]
+                except Exception:
+                    pass
+
+        use_chain = _evolution_chain_from_env() and iteration > 1
+        if iteration > 1 and not use_chain:
+            print("   ℹ 生成策略：独立成章（未设置 AGENTSART_EVOLUTION_CHAIN=1，不继承上一代以控制性能）")
+
+        prev_concept = prev_data.get("director", {}).get("concept", "无（这是初代）")
+        prev_visual = prev_data.get("visual", {}).get("visual_style_summary", "无（这是初代）")
+        prev_code = prev_data.get("builder", {}).get("threejs_code", "无")
+        if not use_chain:
+            prev_concept = "（无：本轮独立生成）"
+            prev_visual = "（无：本轮独立生成）"
+            prev_code = ""
+
+        initial_state: PipelineState = {
+            "iteration": iteration,
+            "face_influence": face_influence or "",
+            "creative_keywords": creative_keywords or [],
+            "use_chain": use_chain,
+            "prev_concept": prev_concept,
+            "prev_visual": prev_visual,
+            "prev_code": prev_code,
+            "director": {},
+            "narrative": {},
+            "visual": {},
+            "builder": {},
+            "reviewer": {},
+            "critic": {},
+        }
+
+        final = self._graph.invoke(initial_state)
+
+        self._generate_output(
+            iteration, final, creative_keywords or [],
+        )
+        return iteration
+
+    # ---- output generation (unchanged logic) ----
+
+    def _generate_output(self, iteration: int, state: dict, creative_keywords: list):
         print("📄 生成 HTML...")
-        
-        # 使用 review 过的代码，如果没有则用 builder 的
+
+        result1 = state.get("director", {})
+        result2 = state.get("narrative", {})
+        result3 = state.get("visual", {})
+        result4 = state.get("builder", {})
+        result5 = state.get("reviewer", {})
+        result6 = state.get("critic", {})
+
         default_threejs = result5.get('threejs_code') or result4.get('threejs_code', '')
-        
-        # 如果代码太短，使用预设的完整代码
+
         if len(default_threejs) < 100:
             default_threejs = '''
 const container = document.getElementById('canvas-container');
@@ -535,9 +593,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 '''
-        
-        # 使用安全的字符串替换，避免 CSS/JS 花括号触发 str.format KeyError
-        # director_concept 必须最后替换，避免正文含「{title}」等子串时被误替换
+
         kw_display = ''
         if creative_keywords:
             kw_display = ''.join(f'<span class="kw-tag">{k}</span>' for k in creative_keywords[:3])
@@ -556,8 +612,7 @@ window.addEventListener('resize', () => {
         html = self.html_template
         for key, value in replacements.items():
             html = html.replace(f"{{{key}}}", str(value))
-        
-        # 清理旧的子文件夹（如果是从老版本过渡过来的）
+
         iterations_dir = self.project_dir / "iterations"
         if iterations_dir.exists():
             for old_version in iterations_dir.glob("v*"):
@@ -565,11 +620,11 @@ window.addEventListener('resize', () => {
                     shutil.rmtree(old_version)
         else:
             iterations_dir.mkdir(parents=True, exist_ok=True)
-        
+
         html_file = iterations_dir / "the-arrival.html"
         _atomic_write(html_file, html)
         _atomic_write(self.project_dir / "evolution.html", html)
-        
+
         _atomic_write_json(iterations_dir / "metadata.json", {
             "iteration": iteration,
             "timestamp": datetime.now().isoformat(),
@@ -580,7 +635,7 @@ window.addEventListener('resize', () => {
             "reviewer": result5,
             "critic": result6,
         })
-        
+
         _atomic_write_json(self.project_dir / "state.json", {
             "iteration": iteration,
             "last_run": datetime.now().isoformat(),
@@ -588,45 +643,48 @@ window.addEventListener('resize', () => {
             "latest_concept": result1.get("concept", ""),
             "latest_score": result6.get("total_score", 0),
         })
-        
+
         print(f"   ✓ 已保存至 {html_file}")
         print(f"   ✓ 已更新 evolution.html")
         print(f"   🎉 迭代 {iteration} 完成!\n")
-        
-        return iteration
-    
+
+    # ---- iteration log (unchanged) ----
+
     def _update_log(self, iteration, result1=None, result2=None, result3=None, result4=None, result5=None, result6=None):
-        """更新实时日志文件"""
         log_file = self.project_dir / "iteration_log.json"
-        
+
         log_entry = {
             "iteration": iteration,
             "timestamp": datetime.now().isoformat(),
         }
-        if result1: log_entry["director"] = result1
-        if result2: log_entry["narrative"] = result2
-        if result3: log_entry["visual"] = result3
-        if result4: log_entry["builder"] = result4
-        if result5: log_entry["reviewer"] = result5
-        if result6: log_entry["critic"] = result6
-        
-        # 读取现有日志
+        if result1:
+            log_entry["director"] = result1
+        if result2:
+            log_entry["narrative"] = result2
+        if result3:
+            log_entry["visual"] = result3
+        if result4:
+            log_entry["builder"] = result4
+        if result5:
+            log_entry["reviewer"] = result5
+        if result6:
+            log_entry["critic"] = result6
+
         logs = []
         if log_file.exists():
             with open(log_file, "r", encoding="utf-8") as f:
-                try: logs = json.load(f)
-                except Exception: pass
-        
-        # 查找是否已经存在当前 iteration 的记录，有则覆盖，无则追加
+                try:
+                    logs = json.load(f)
+                except Exception:
+                    pass
+
         idx = next((i for i, log in enumerate(logs) if log.get("iteration") == iteration), -1)
         if idx >= 0:
             logs[idx] = log_entry
         else:
             logs.append(log_entry)
-            
-        # 只保留最近 1 次迭代（用户要求永远只保留最新的一次）
+
         logs = logs[-1:] if logs else []
-        
         _atomic_write_json(log_file, logs)
 
 
