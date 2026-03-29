@@ -128,6 +128,8 @@
         /** 持续截图：检测到清晰人脸即保存到 localStorage + 上传服务端 */
         const CONTINUOUS_CAPTURE_MS = 2000;
         const UPLOAD_MIN_GAP_MS = 5000;
+        /** 预览与上传同一门槛：低于此值的 landmark 多为误检/挡镜头，避免 index 连续刷无人脸裁切 */
+        const PREVIEW_CAPTURE_MIN_Q = 0.56;
         let lastFaceUploadAt = 0;
         let captureUploading = false;
 
@@ -267,9 +269,9 @@
         ];
         const SEG_MAX = 160;
         const segScratch = new Float32Array(SEG_MAX * 4);
-        /** 轮廓线段端点时间平滑，减轻 MediaPipe 抖动导致的细线闪烁 */
+        /** 轮廓线段端点时间平滑，减轻 MediaPipe 抖动导致的细线闪烁与脸周引力折皱 */
         const smoothSegScratch = new Float32Array(SEG_MAX * 4);
-        const SEG_LINE_SMOOTH = 0.11;
+        const SEG_LINE_SMOOTH = 0.16;
         let smoothSegPrimed = false;
         let lastSmoothedSegFloats = 0;
         const persistScratch = new Float32Array(SEG_MAX * 4);
@@ -285,6 +287,8 @@
 
         /** 摄像头归一化坐标 → 全屏画布内 object-fit:contain 下的 UV（与画面中人像比例一致） */
         function mapLandmarkToCanvasUV(x, y, vw, vh, cw, ch) {
+            // 前置摄像头未镜像时，MediaPipe x 与「照镜子」左右相反；水平翻转后与转头方向、自观感一致
+            x = 1.0 - x;
             const scale = Math.min(cw / vw, ch / vh);
             const dispW = vw * scale;
             const dispH = vh * scale;
@@ -545,13 +549,13 @@
                 @fragment fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
                     let res = uniforms.res;
                     var uv = fragCoord.xy / res.xy;
-                    var p = (uv - 0.5) * 2.0;
-                    p.x *= res.x / res.y;
+                    // 必须与 segment_metrics / face_interior_winding 一致：线段端点用 toNdc，采样点不可用手写 (uv-0.5)（x 与 toNdc 差一个符号，会导致绕数与距离场错位、脸周流体随时间「胀开」）
+                    var p = toNdc(uv, res);
 
                     // Background tide：与脸无关，略加强以保证脸外区域始终有慢流动感
                     let tide = vec2<f32>(
-                        sin(uniforms.time * 0.12 + p.y * 0.3) * 0.011,
-                        cos(uniforms.time * 0.09 + p.x * 0.25) * 0.0085
+                        sin(uniforms.time * 0.12 + uv.y * 0.3) * 0.011,
+                        cos(uniforms.time * 0.09 + uv.x * 0.25) * 0.0085
                     );
                     p = p + tide;
 
@@ -562,7 +566,7 @@
                     var acc = vec2<f32>(0.0, 0.0);
                     var nearLoose = 0.0;
                     var nearTight = 0.0;
-                    let kFace = 6.8 - uniforms.volatility * 0.35;
+                    let kFace = 6.35 - uniforms.volatility * 0.28;
                     let pr = uniforms.presence;
 
                     for (var i: i32 = 0; i < 160; i = i + 1) {
@@ -609,11 +613,12 @@
                     }
 
                     let wsum = max(length(acc), 1e-6);
-                    // 向轮廓聚拢：略宽的 wPull + 更高 pullAmp；呼吸周期稍慢，流向更易读
-                    let gatherBreath = 0.68 + 0.32 * sin(uniforms.time * 0.28);
-                    let pullAmp = (0.005 + uniforms.motion * 0.004 + uniforms.presence * 0.003) * gatherBreath;
+                    // 不向时间要振幅：避免 pullAmp 随 sin(time) 周期性改变等效「脸周影响半径」
+                    let pullAmp = 0.0042 + uniforms.motion * 0.0032 + uniforms.presence * 0.0024;
                     let drift = (acc / wsum) * pullAmp;
 
+                    // 脸内判定用 drift 前坐标：避免引力位移把边界像素判进脸内，叠 FBM 后有效「流体脸环」越跑越大
+                    let pForFaceMask = p;
                     p = p + drift;
                     let cnL = clamp(nearLoose * (1.02 + uniforms.presence * 0.16), 0.0, 1.0);
                     let lineA = clamp(uniforms.contour_line_alpha, 0.0, 1.0);
@@ -622,20 +627,16 @@
                     // 调试：去掉宽场 cnL 的范围光/晕染，仅保留窄带 cnT 用于细线
                     let cnLVis = cnL * (1.0 - dbg);
 
-                    let faceIn = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
-                    let flowBoost = 0.88 * faceIn;
-                    let emotionFlow = max(0.88, 1.0 + uniforms.emotion_joy * 0.18 - uniforms.emotion_calm * 0.12);
-                    // 脸外流体：情绪不整体加速；远场相位略快于脸周，避免「只有脸附近在动」
+                    let faceIn = face_interior_winding(pForFaceMask, nF) * uniforms.contour_fade * sb;
+                    // 脸外流体：相位仅由 time + 空间权重驱动，不叠情绪缓变（否则长时间观感持续漂移）
                     let faceFluidW = clamp(max(faceIn, cnLVis * 0.52), 0.0, 1.0);
                     let farFluid = 1.0 - faceFluidW;
-                    let emotionFlowGlobal = mix(1.0, emotionFlow, mix(0.06, 1.0, faceFluidW));
-                    let flowSpeedMult = mix(1.0, 1.0 + flowBoost, sb) * emotionFlowGlobal;
-                    let t = uniforms.time * mix(1.05 + uniforms.motion * 0.06, 0.92 + uniforms.motion * 0.22 * cnLVis, faceFluidW) * flowSpeedMult;
+                    let t = uniforms.time * mix(1.05 + uniforms.motion * 0.06, 0.92 + uniforms.motion * 0.22 * cnLVis, faceFluidW);
 
                     // 远场不受 silhouette 渐显「砍半」；近脸/轮廓仍保留原 sb 柔化，避免进出画时跳变
                     let sbWiggle = mix(mix(0.5, 1.0, sb), 1.0, farFluid);
-                    let ampNear = uniforms.motion * 0.002 * cnLVis + cnLVis * 0.004 + uniforms.emotion_tension * 0.025 * cnLVis;
-                    let amp = (0.0035 + ampNear + farFluid * 0.0028) * flowSpeedMult * sbWiggle;
+                    let ampNear = uniforms.motion * 0.0016 * cnLVis + cnLVis * 0.0032 + uniforms.emotion_tension * 0.014 * cnLVis;
+                    let amp = (0.003 + ampNear + farFluid * 0.0025) * sbWiggle;
 
                     p = p + vec2<f32>(
                         sin((p.y + t) * 3.4 + cnLVis * 3.7),
@@ -643,19 +644,24 @@
                     ) * amp;
                     
                     let sbFbm = mix(mix(0.45, 1.0, sb), 1.0, farFluid);
-                    let pFbmWarp = 0.025 * cnLVis * flowSpeedMult * sbFbm + farFluid * 0.018 * flowSpeedMult;
+                    // 脸周域扭曲过强 + fbm 里对 time 线性偏移 → 长时间后采样域「卷」成折皱；改为有界振荡并降低级联系数
+                    let pFbmWarp = min(0.03, 0.014 * cnLVis * sbFbm + farFluid * 0.012);
                     let pFbm = p + vec2<f32>(
-                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.4, 0.0)),
-                        fbm(p * 0.48 + vec2<f32>(0.0, cnLVis * 0.4))
+                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.32, 0.0)),
+                        fbm(p * 0.48 + vec2<f32>(0.0, cnLVis * 0.32))
                     ) * pFbmWarp;
 
                     let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
-                    let r = vec2<f32>(
-                        fbm(pFbm + 4.0 * q + vec2<f32>(1.7, 9.2) + t * 0.7),
-                        fbm(pFbm + 4.0 * q + vec2<f32>(8.3, 2.8) + t * 0.6)
+                    let tOsc = vec2<f32>(
+                        sin(uniforms.time * 0.38) * 1.85,
+                        cos(uniforms.time * 0.33) * 1.85
                     );
-                    var f = fbm(pFbm + 4.0 * r);
-                    f = f * (1.0 - cnLVis * 0.07) + cnLVis * 0.05 * sin(f * 12.0 + t * 0.6);
+                    let r = vec2<f32>(
+                        fbm(pFbm + 3.05 * q + vec2<f32>(1.7, 9.2) + tOsc),
+                        fbm(pFbm + 3.05 * q + vec2<f32>(8.3, 2.8) + vec2<f32>(tOsc.y * 0.85, tOsc.x * 0.85))
+                    );
+                    var f = fbm(pFbm + 3.05 * r);
+                    f = f * (1.0 - cnLVis * 0.06) + cnLVis * 0.038 * sin(f * 10.5 + sin(uniforms.time * 0.52) * 2.8);
 
                     let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
                     let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
@@ -673,8 +679,8 @@
                     // Face area → intensity boost (closer = brighter contour & flow)
                     let areaBoost = clamp(uniforms.face_area * 3.5, 0.0, 1.0);
 
-                    // Contour breathing: ~4s period pulse
-                    let breathPulse = mix(0.72, 1.0, uniforms.contour_breath);
+                    // 轮廓亮度不随时间呼吸，避免脸周观感周期性「胀缩」
+                    let breathPulse = 1.0;
 
                     let lineEase = mix(0.38, 1.0, sb);
                     var rim = pow(cnT, 1.42) * (0.09 + uniforms.presence * 0.055 + areaBoost * 0.035) * (1.0 - dbg) * lineEase;
@@ -809,7 +815,8 @@
             const hasPose = !!(sharedData.pose && sharedData.pose.length >= 25);
             const targetPresence = (hasFace ? 0.48 : 0.0)
                 + (hasPose ? (hasFace ? 0.12 : 0.44) : 0.0);
-            trackedPresence = lerp(trackedPresence, targetPresence, 0.07);
+            const prLerp = hasFace || hasPose ? 0.24 : 0.06;
+            trackedPresence = lerp(trackedPresence, targetPresence, prLerp);
 
             const leftWristVis = (hasPose && sharedData.pose[15]) ? (sharedData.pose[15].visibility || 0) : 0;
             const rightWristVis = (hasPose && sharedData.pose[16]) ? (sharedData.pose[16].visibility || 0) : 0;
@@ -823,14 +830,19 @@
             sharedData.instantFaceSpeed = hasFace ? faceSpeed : 0;
 
             const motionComposite = faceSpeed * 0.4;
-            const deadZone = 0.012;
+            // 略提高死区： landmark 微抖会长期撑住 trackedMotion，脸周 pullAmp/volatility 不降 → 折皱观感随时间变重
+            const deadZone = 0.024;
             const gated = Math.max(0, motionComposite - deadZone);
             const rawMotion = Math.min(1.0, gated * 0.85);
-            trackedMotion = lerp(trackedMotion, rawMotion, 0.06);
+            // 静止时加快衰减，避免 motion 长期偏高把脸周流体拉得过宽
+            const motionLerp = rawMotion < 0.05 ? 0.14 : 0.06;
+            trackedMotion = lerp(trackedMotion, rawMotion, motionLerp);
+            trackedMotion = Math.min(trackedMotion, 0.26);
 
             lastFaceCenter = faceCenter || lastFaceCenter;
 
-            trackedFaceArea = lerp(trackedFaceArea, sharedData.faceArea || 0, 0.06);
+            const areaTarget = Math.min(0.52, Math.max(0, sharedData.faceArea || 0));
+            trackedFaceArea = lerp(trackedFaceArea, areaTarget, 0.06);
 
             const emo = sharedData.emotions || { joy: 0, tension: 0, surprise: 0, calm: 0 };
             trackedEmotionJoy = lerp(trackedEmotionJoy, emo.joy, 0.06);
@@ -941,8 +953,8 @@
         async function continuousFaceCapture() {
             if (!visionSystem || captureUploading) return;
             const q = computeHeadshotQuality();
-            if (q < 0.45) return;
             if (!sharedData.face || sharedData.face.length < 10) return;
+            if (q < PREVIEW_CAPTURE_MIN_Q) return;
 
             try {
                 const base64 = visionSystem.captureFrame();
@@ -953,8 +965,7 @@
                 );
 
                 const now = Date.now();
-                /* 提高上传阈值，减少「误检脸/大模糊场景」把垃圾帧送进服务端触发长文分析 */
-                if (q < 0.56 || now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
+                if (now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
 
                 captureUploading = true;
                 lastFaceUploadAt = now;
@@ -1056,13 +1067,17 @@
                 }
                 if (!nz) smoothSegScratch.fill(0);
             }
-            trackedContourFade = lerp(trackedContourFade, segTotal > 0 ? 1.0 : 0.0, segTotal > 0 ? 0.056 : 0.026);
-            trackedSilhouetteBlend = lerp(trackedSilhouetteBlend, trackedContourFade, 0.026);
+            trackedContourFade = lerp(trackedContourFade, segTotal > 0 ? 1.0 : 0.0, segTotal > 0 ? 0.12 : 0.04);
+            trackedSilhouetteBlend = lerp(
+                trackedSilhouetteBlend,
+                trackedContourFade,
+                segTotal > 0 ? 0.18 : 0.035
+            );
             const lineTarget = segTotal > 0 ? 1.0 : 0.0;
             trackedContourLineAlpha = lerp(
                 trackedContourLineAlpha,
                 lineTarget,
-                segTotal > 0 ? 0.011 : 0.0075
+                segTotal > 0 ? 0.06 : 0.008
             );
 
             const useLiveSeg = segTotal > 0;
@@ -1081,7 +1096,8 @@
 
             contourBreathPhase += deltaTime * 0.001;
             if (contourBreathPhase > 1e5) contourBreathPhase -= 1e5;
-            const contourBreath = 0.5 + 0.5 * Math.sin(contourBreathPhase * Math.PI * 0.5);
+            // 固定为 1：着色器内不再用时间调制轮廓强度，避免脸周「随时间胀缩」
+            const contourBreath = 1.0;
             if (ripplePhaseTimer >= 0) {
                 ripplePhaseTimer += deltaTime * 0.001;
                 if (ripplePhaseTimer > 3.0) ripplePhaseTimer = -10;
@@ -1099,7 +1115,7 @@
             _uniformScratch[2] = accumulatedPhase;
             _uniformScratch[3] = 0.35 + trackedMotion * 0.55;
             _uniformScratch[4] = 0.08 + trackedMotion * 0.35;
-            _uniformScratch[5] = trackedMotion;
+            _uniformScratch[5] = Math.min(0.42, trackedMotion);
             _uniformScratch[6] = trackedPresence;
             _uniformScratch[7] = trackedLeftPresence;
             _uniformScratch[8] = trackedRightPresence;
