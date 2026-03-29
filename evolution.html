@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="English: AI-driven logic redefines existence. Perception glitches, revealing non-Euclidean folds and data's poetic flux. A new ontology emerges from information's deep rifts. | 中文: 智械逻辑重塑存在本体。感知在故障中变异，非欧场域褶皱。数据诗学，于信息裂隙中重构数字秩序。">
-    <meta name="generator" content="AGENTSART - Iteration 1">
-    <meta name="created" content="2026-03-28 20:04">
+    <meta name="description" content="Poetic Data. Chaotic Genesis. Folded Mind. Residual Sight. Redefined Being. | 数据诗学。混沌生成。意识褶皱。残差显影。存在重塑。">
+    <meta name="generator" content="AGENTSART - Iteration 4">
+    <meta name="created" content="2026-03-29 13:52">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -219,7 +219,7 @@
             border-radius: 3px; color: rgba(212, 175, 55, 0.8);
         }
     </style>
-    <!-- 引入 Three.js (使用稳定的 r128 版本，避免 404 错误) -->
+    <!-- Three.js r160（npm 0.160.1，UMD three.min.js；0.161+ 仅提供 ES module 构建） -->
     <script src="/js/lib/three.min.js"></script>
 </head>
 <body>
@@ -233,24 +233,24 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 1</span>
-        <span class="iter-style" title="Phosphorescent Rifts | 超维律动">Phosphorescent Rifts | 超维律动</span>
+        <span class="iter-num">Iter 4</span>
+        <span class="iter-style" title="Algorithmic Folds, Residual Imaging | 算法褶皱，残差显影">Algorithmic Folds, Residual Imaging | 算法褶皱，残差显影</span>
     </div>
     
     <div class="overlay">
-        <h1>The Glitch in Being | 存在之褶</h1>
+        <h1>Residual Gaze | Algorithmic Unfolding | 残差视域 | 褶皱显影</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"></div>
-        <div class="overlay-concept">通过对空间几何结构的非线性解构与再编码，呈现AI作为一种超维度逻辑对存在本体的渗透与重塑。视觉上，它将显现为一种由计算力驱动的、持续演化的“现实褶皱”与“信息裂隙”，揭示智能纪元下感知与秩序的内在变异。</div>
-        <div class="desc">English: Logic bends the perceived.
-Reality, a shimmering fold.
-Data births new ontologies. | 中文: 逻辑重塑感知。
-现实，褶皱成形。
-数据涌现本体。</div>
+        <div class="overlay-keywords"><span class="kw-tag">算法褶皱</span><span class="kw-tag">瞳孔残差</span></div>
+        <div class="overlay-concept">AI视域下，碳基湿件的感知异变：算法褶皱形变，瞳孔残差显影，重塑存在。</div>
+        <div class="desc">Algorithm Folds: Consciousness Maps Non-linearly.
+Pupil Residuals: Existence Re-imagined.
+
+算法褶皱：意识非线性映射。
+瞳孔残差：存在重塑显影。</div>
         <div class="meta">
             AGENTSART SYSTEM<br>
             Autonomous Rendering<br>
-            2026-03-28 20:04
+            2026-03-29 13:52
         </div>
     </div>
     
@@ -268,7 +268,7 @@ Data births new ontologies. | 中文: 逻辑重塑感知。
                     const m = (badge.textContent || '').match(/(\\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 1;
+                return 4;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -383,6 +383,7 @@ Data births new ontologies. | 中文: 逻辑重塑感知。
             ren.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             ren.toneMapping = THREE.ACESFilmicToneMapping;
             ren.toneMappingExposure = 1.2;
+            ren.outputColorSpace = THREE.SRGBColorSpace;
             ctr.appendChild(ren.domElement);
 
             scene.add(new THREE.AmbientLight(0x1a1a2e, 0.5));
@@ -467,261 +468,263 @@ Data births new ontologies. | 中文: 逻辑重塑感知。
     <script>
         // Core Three.js render code
         try {
-// Phosphorescent Rifts | Hyperdimensional Rhythm
-// Concept: Through non-linear deconstruction and re-encoding of spatial geometry, this work presents AI's penetration and reshaping of existence itself. Visually, it manifests as a computationally driven, continuously evolving "reality fold" and "information rift," revealing the intrinsic mutation of perception and order in the intelligent era.
+/**
+ * Title: Algorithmic Folds, Residual Imaging
+ * Concept: In the AI's gaze, the perception of carbon-based wetware undergoes a metamorphosis.
+ *          Algorithmic folds deform, pupil residuals develop, and existence is reshaped.
+ * Technique: BufferGeometry Vertex Displacement & Dynamic Line Segment Visualization with Glitching Particle Aura.
+ * Author: GPT-4 for Creative Coding
+ * Date: 2024-05-21
+ * Platform: Three.js r160
+ */
 
-const scene = new THREE.Scene();
-
-const canvasContainer = document.getElementById('canvas-container');
-const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance'
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
-canvasContainer.appendChild(renderer.domElement);
-
-// --- Camera ---
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 5, 25);
-
-// --- Lighting ---
-// Ambient light to ensure visibility in shadows
-const ambientLight = new THREE.AmbientLight(0x4040ff, 0.4); // Cool ambient
-scene.add(ambientLight);
-
-// Main point light, creating highlights and color variation
-const pointLight1 = new THREE.PointLight(0xff6000, 1.5, 200); // Warm orange
-pointLight1.position.set(10, 15, 10);
-scene.add(pointLight1);
-
-// Secondary point light, for complementary color accents
-const pointLight2 = new THREE.PointLight(0x00ffff, 1.0, 200); // Cyan
-pointLight2.position.set(-15, -10, -15);
-scene.add(pointLight2);
-
-// --- Scene Background ---
-// Not pure black, as requested (L > 8%)
-scene.background = new THREE.Color().setHSL(0.6, 0.1, 0.09);
-scene.fog = new THREE.FogExp2(scene.background, 0.02);
-
-// --- Multi-Layer Visual System ---
-
-// Layer 1: The Deforming Lattice (InstancedMesh of Octahedra)
-// This represents the "reality folds" – a structured yet unstable geometric form.
-const INSTANCE_COUNT = 1200;
-const octahedronGeometry = new THREE.OctahedronGeometry(0.2, 0);
-const instancedMaterial = new THREE.MeshStandardMaterial({
-    color: 0xeeeeff,
-    metalness: 0.9,
-    roughness: 0.2,
-    emissive: 0x00ffff,
-    emissiveIntensity: 0.5,
-});
-const instancedMesh = new THREE.InstancedMesh(octahedronGeometry, instancedMaterial, INSTANCE_COUNT);
-scene.add(instancedMesh);
-
-const dummy = new THREE.Object3D();
-const instanceData = []; // Store unique data for each instance's animation
-
-// Parametric function for the core structure (a complex toroidal knot)
-function getTorusKnotPoint(t, p, q, radius) {
-    const r = Math.cos(q * t) + radius;
-    const x = r * Math.cos(p * t);
-    const y = r * Math.sin(p * t);
-    const z = -Math.sin(q * t);
-    return new THREE.Vector3(x, y, z).multiplyScalar(8);
-}
-
-for (let i = 0; i < INSTANCE_COUNT; i++) {
-    const t = (i / INSTANCE_COUNT) * Math.PI * 2;
-    const basePosition = getTorusKnotPoint(t, 3, 7, 1.5); // p=3, q=7 for complexity
-
-    dummy.position.copy(basePosition);
-    dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    dummy.updateMatrix();
-    instancedMesh.setMatrixAt(i, dummy.matrix);
-
-    instanceData.push({
-        basePosition: basePosition,
-        phase: Math.random() * Math.PI * 2,
-        rotationSpeed: 0.5 + Math.random() * 1.5
-    });
-}
-instancedMesh.instanceMatrix.needsUpdate = true;
-
-
-// Layer 2: The Information Rift (Points)
-// This represents the "information leak" – chaotic data escaping from the deforming structure.
-const PARTICLE_COUNT = 4000;
-const particlesGeometry = new THREE.BufferGeometry();
-const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
-const particleColors = new Float32Array(PARTICLE_COUNT * 3);
-const particleData = [];
-
-const baseParticleColor = new THREE.Color(0xff00ff); // Magenta base
-
-for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const t = Math.random() * Math.PI * 2;
-    const basePosition = getTorusKnotPoint(t, 3, 7, 1.5);
-
-    // Scatter particles around the core structure with a wide, non-uniform distribution
-    const scatterRadius = 3 + Math.pow(Math.random(), 2) * 15;
-    const offset = new THREE.Vector3(
-        (Math.random() - 0.5),
-        (Math.random() - 0.5),
-        (Math.random() - 0.5)
-    ).normalize().multiplyScalar(scatterRadius);
-    
-    const finalPos = basePosition.add(offset);
-    particlePositions[i * 3] = finalPos.x;
-    particlePositions[i * 3 + 1] = finalPos.y;
-    particlePositions[i * 3 + 2] = finalPos.z;
-
-    particleColors[i * 3] = baseParticleColor.r;
-    particleColors[i * 3 + 1] = baseParticleColor.g;
-    particleColors[i * 3 + 2] = baseParticleColor.b;
-
-    particleData.push({
-        phase: Math.random() * Math.PI * 2,
-        baseHue: 0.83 + (Math.random() - 0.5) * 0.1 // Magenta base hue with slight variation
-    });
-}
-
-particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-particlesGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
-
-const particlesMaterial = new THREE.PointsMaterial({
-    size: 0.1,
-    vertexColors: true,
-    blending: THREE.AdditiveBlending,
-    transparent: true,
-    depthWrite: false,
-    sizeAttenuation: true,
-});
-const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
-scene.add(particleSystem);
-
-
-// Layer 3: The Structural Singularity (LineSegments)
-// This represents the underlying logic, the abstract mathematical path of the rift itself.
-const linePoints = [];
-const LINE_SEGMENTS = 200;
-for(let i=0; i <= LINE_SEGMENTS; i++) {
-    const t = (i / LINE_SEGMENTS) * Math.PI * 2;
-    linePoints.push(getTorusKnotPoint(t, 3, 7, 1.5));
-}
-const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
-const lineMaterial = new THREE.LineBasicMaterial({
-    color: 0xffffff,
-    linewidth: 1,
-    transparent: true,
-    opacity: 0.25
-});
-const coreLine = new THREE.Line(lineGeometry, lineMaterial);
-scene.add(coreLine);
-
-
-// --- Animation Loop ---
+// --- SCENE SETUP ---
+let scene, camera, renderer, container;
+let mainFoldMesh, residualLines, pupilParticles;
+let pointLight1, pointLight2;
 const clock = new THREE.Clock();
+const particleCount = 3500; // FIX: Moved to global scope to be accessible in animate()
 
-function animate() {
-    requestAnimationFrame(animate);
+function init() {
+    container = document.getElementById('canvas-container');
 
-    const t = clock.getElapsedTime(); // Use THREE.Clock for smoother time
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color().setHSL(0.6, 0.1, 0.08); // Dark but not black background
+    scene.fog = new THREE.FogExp2(scene.background, 0.08);
 
-    // --- Slow Layer Animation (Camera, Fog, Lights) ---
-    // Period: ~89s (2*PI / 0.07)
-    camera.position.x = 25 * Math.cos(t * 0.07);
-    camera.position.z = 25 * Math.sin(t * 0.07);
-    camera.lookAt(scene.position);
+    // Camera
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 4, 18);
 
-    // Fog density breathing
-    // Period: ~42s (2*PI / 0.15)
-    scene.fog.density = 0.02 + 0.005 * Math.sin(t * 0.15);
-    
-    // Global color temperature shift via light color
-    // Period: ~63s (2*PI / 0.1)
-    pointLight1.color.setHSL(0.08 + 0.05 * Math.sin(t * 0.1), 1.0, 0.5);
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    container.appendChild(renderer.domElement);
 
+    // --- LIGHTING ---
+    // Ambient light for base illumination
+    const ambientLight = new THREE.AmbientLight(0x88aaff, 0.4);
+    scene.add(ambientLight);
 
-    // --- Fast Layer Animation (Geometries) ---
+    // Dynamic point lights with contrasting colors
+    pointLight1 = new THREE.PointLight(0xff8844, 2.5, 30); // Warm light
+    pointLight1.position.set(5, 5, 5);
+    scene.add(pointLight1);
 
-    // 1. Animate InstancedMesh (The Lattice)
-    const tempMatrix = new THREE.Matrix4();
-    const tempPosition = new THREE.Vector3();
-    const tempQuaternion = new THREE.Quaternion();
-    const tempScale = new THREE.Vector3(1, 1, 1);
-
-    for (let i = 0; i < INSTANCE_COUNT; i++) {
-        const data = instanceData[i];
-
-        // Non-Euclidean perturbation: a glitch-like position offset
-        // Frequencies: 1.8, 2.2. Periods: ~3.5s, ~2.8s
-        const glitchOffset = new THREE.Vector3(
-            Math.sin(t * 1.8 + data.phase) * 0.2,
-            Math.cos(t * 2.2 + data.phase) * 0.2,
-            Math.sin(t * 1.5 + data.phase) * 0.2
-        );
-        tempPosition.copy(data.basePosition).add(glitchOffset);
-
-        // Individual rotation
-        tempQuaternion.setFromEuler(new THREE.Euler(
-            t * data.rotationSpeed * 0.5,
-            t * data.rotationSpeed * 0.8,
-            0
-        ));
-
-        // Pulsing scale
-        // Period: ~3.14s (2*PI / 2.0)
-        const scaleFactor = 1.0 + 0.3 * Math.sin(t * 2.0 + data.phase);
-        tempScale.set(scaleFactor, scaleFactor, scaleFactor);
-
-        tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
-        instancedMesh.setMatrixAt(i, tempMatrix);
-    }
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    
-    // Dynamic emissive color pulse for the lattice
-    // Period: ~4.5s (2*PI / 1.4)
-    const emissiveHue = 0.55 + 0.05 * Math.sin(t * 1.4);
-    instancedMaterial.emissive.setHSL(emissiveHue, 0.9, 0.6);
-
-    // 2. Animate Points (Information Rift)
-    const colors = particleSystem.geometry.attributes.color;
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const data = particleData[i];
-        // Color flickering
-        // Period: ~2.1s (2*PI / 3.0)
-        const brightness = 0.4 + 0.6 * Math.abs(Math.sin(t * 3.0 + data.phase));
-        const hue = data.baseHue;
-        const tempColor = new THREE.Color();
-        tempColor.setHSL(hue, 1.0, brightness);
-        colors.setXYZ(i, tempColor.r, tempColor.g, tempColor.b);
-    }
-    colors.needsUpdate = true;
-    
-    // 3. Animate Line (Structural Singularity)
-    // Period: ~5.2s (2*PI / 1.2)
-    coreLine.material.opacity = 0.15 + 0.15 * Math.sin(t * 1.2);
+    pointLight2 = new THREE.PointLight(0x44ffff, 2.0, 30); // Cool light
+    pointLight2.position.set(-5, -5, -5);
+    scene.add(pointLight2);
 
 
-    renderer.render(scene, camera);
+    // --- GEOMETRY & MATERIALS ---
+    createArtisticSystem();
+
+    // --- EVENT LISTENERS ---
+    window.addEventListener('resize', onWindowResize);
+
+    animate();
 }
 
-// --- Resize Handling ---
+/**
+ * Creates the multi-layered visual system:
+ * 1. The main deforming mesh (Algorithmic Folds)
+ * 2. The wireframe overlay (Residual Imaging)
+ * 3. The particle cloud (Pupil Echoes)
+ */
+function createArtisticSystem() {
+    // 1. The Core Folded Geometry
+    // This parametric function defines the unique base shape.
+    // It's a complex, self-intersecting surface.
+    const parametricFunction = (u, v, target) => {
+        const uPi = u * Math.PI * 2;
+        const vPi = v * Math.PI * 2;
+        
+        const R = 4;
+        const r = 2;
+
+        let x = Math.cos(uPi) * (R + r * Math.cos(vPi));
+        let y = Math.sin(uPi) * (R + r * Math.cos(vPi));
+        let z = r * Math.sin(vPi) + Math.cos(uPi * 2) * 1.5 + Math.sin(vPi * 3) * 0.8;
+        
+        target.set(x, y, z);
+    };
+
+    const segments = 120;
+    const geometry = new THREE.ParametricGeometry(parametricFunction, segments, segments);
+    geometry.center();
+
+    // Store original positions for stable animation base
+    const originalPositions = geometry.attributes.position.clone();
+    geometry.setAttribute('originalPosition', originalPositions);
+
+    // Layer 1: The Main Mesh (Algorithmic Folds)
+    const foldMaterial = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(0x9999dd),
+        metalness: 0.85,
+        roughness: 0.25,
+        sheen: 0.8,
+        sheenColor: new THREE.Color(0xeeeeff),
+        sheenRoughness: 0.4,
+        emissive: new THREE.Color(0x222288),
+        emissiveIntensity: 0.5,
+    });
+
+    mainFoldMesh = new THREE.Mesh(geometry, foldMaterial);
+    scene.add(mainFoldMesh);
+
+    // Layer 2: The Line Segments (Residual Imaging)
+    const lineMaterial = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.4,
+        linewidth: 1, // Note: linewidth > 1 is not guaranteed on all platforms
+    });
+    residualLines = new THREE.LineSegments(geometry, lineMaterial);
+    scene.add(residualLines);
+
+
+    // Layer 3: The Particle Cloud (Pupil Echoes)
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleColors = new Float32Array(particleCount * 3);
+    const particlePhases = new Float32Array(particleCount * 3); // x: speed, y: phase, z: amplitude
+
+    const baseColor = new THREE.Color();
+
+    for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        const radius = 8 + Math.random() * 8;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos((Math.random() * 2) - 1);
+
+        particlePositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+        particlePositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+        particlePositions[i3 + 2] = radius * Math.cos(phi);
+
+        baseColor.setHSL(Math.random(), 1.0, 0.6);
+        particleColors[i3] = baseColor.r;
+        particleColors[i3 + 1] = baseColor.g;
+        particleColors[i3 + 2] = baseColor.b;
+        
+        particlePhases[i3] = 0.5 + Math.random() * 1.5; // speed
+        particlePhases[i3 + 1] = Math.random() * Math.PI * 2; // phase
+        particlePhases[i3 + 2] = 0.1 + Math.random() * 0.4; // amplitude
+    }
+
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+    particleGeometry.setAttribute('phases', new THREE.BufferAttribute(particlePhases, 3));
+
+
+    const particleMaterial = new THREE.PointsMaterial({
+        size: 0.08,
+        vertexColors: true,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+    });
+
+    pupilParticles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(pupilParticles);
+}
+
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-window.addEventListener('resize', onWindowResize);
+function animate() {
+    requestAnimationFrame(animate);
 
-// --- Start Animation ---
-animate();
+    const t = clock.getElapsedTime(); // Time in seconds, more stable than performance.now()
+
+    // --- SLOW LAYER ANIMATION (Cycles: 30-90s) ---
+    // Camera slow orbit
+    const cameraRadius = 18;
+    camera.position.x = cameraRadius * Math.cos(t * 0.08);
+    camera.position.z = cameraRadius * Math.sin(t * 0.08);
+    camera.position.y = 6 * Math.sin(t * 0.11);
+    camera.lookAt(scene.position);
+
+    // Point lights slow movement
+    pointLight1.position.x = 10 * Math.sin(t * 0.15 + 1);
+    pointLight1.position.y = 10 * Math.cos(t * 0.2);
+    pointLight1.position.z = 10 * Math.cos(t * 0.12 + 2);
+
+    pointLight2.position.x = 12 * Math.cos(t * 0.18 + 3);
+    pointLight2.position.y = 12 * Math.sin(t * 0.14);
+    pointLight2.position.z = 12 * Math.sin(t * 0.22 + 4);
+    
+    // Dynamic background/fog color shift
+    const fogHue = 0.6 + 0.05 * Math.sin(t * 0.05);
+    scene.background.setHSL(fogHue, 0.1, 0.08);
+    scene.fog.color.copy(scene.background);
+
+
+    // --- FAST LAYER ANIMATION (Cycles: 2-8s) ---
+    // 1. Main Mesh Vertex Displacement
+    const positions = mainFoldMesh.geometry.attributes.position;
+    const originalPositions = mainFoldMesh.geometry.attributes.originalPosition;
+    const vertex = new THREE.Vector3();
+    const originalVertex = new THREE.Vector3();
+
+    for (let i = 0; i < positions.count; i++) {
+        originalVertex.fromBufferAttribute(originalPositions, i);
+
+        // Multiple sine waves for complex, organic-like deformation
+        const noise1 = Math.sin(originalVertex.y * 0.8 + t * 1.5) * 0.2;
+        const noise2 = Math.cos(originalVertex.x * 0.5 + t * 0.9) * 0.3;
+        const noise3 = Math.sin(originalVertex.z * 1.2 - t * 1.2) * 0.25;
+        const totalDisplacement = (noise1 + noise2 + noise3);
+
+        vertex.copy(originalVertex).multiplyScalar(1 + totalDisplacement * 0.2);
+        positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+    positions.needsUpdate = true;
+    mainFoldMesh.geometry.computeVertexNormals(); // Re-calculate normals for correct lighting
+
+    // Emissive pulse
+    mainFoldMesh.material.emissiveIntensity = 0.5 + 0.5 * (Math.sin(t * 2.2) + 1);
+    
+    // Line color dynamic shift
+    residualLines.material.color.setHSL(0.55 + 0.08 * Math.sin(t * 0.4), 1.0, 0.6);
+
+    // 2. Pupil Particles Color Glitch & Micro-Movement
+    const particleColors = pupilParticles.geometry.attributes.color;
+    const particlePositions = pupilParticles.geometry.attributes.position;
+    const particlePhases = pupilParticles.geometry.attributes.phases;
+    const color = new THREE.Color();
+
+    for (let i = 0; i < particleCount; i++) {
+        // Color glitching
+        const hue = (t * 0.3 + i * 0.0007) % 1;
+        color.setHSL(hue, 1.0, 0.6);
+        particleColors.setXYZ(i, color.r, color.g, color.b);
+        
+        // Micro-movement
+        const speed = particlePhases.getX(i);
+        const phase = particlePhases.getY(i);
+        const amplitude = particlePhases.getZ(i);
+        const i3 = i * 3;
+        
+        particlePositions.array[i3 + 1] += Math.sin(t * speed + phase) * amplitude * 0.01;
+    }
+    particleColors.needsUpdate = true;
+    particlePositions.needsUpdate = true;
+
+
+    renderer.render(scene, camera);
+}
+
+init();
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
             styleLoadingRecompilingBar(true);

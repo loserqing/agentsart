@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-多智能体协作编排器：生成可嵌入 evolution.html 的 Three.js (WebGL) 生成艺术。
+多智能体协作编排器：生成可嵌入 evolution.html 的 Three.js r160 / npm 0.160.x（WebGL）生成艺术。
 技术栈：LangGraph (StateGraph) + langchain-google-genai
 """
 
@@ -343,9 +343,10 @@ class FullOrchestrator:
         iteration = state.get("iteration", 0)
         if state.get("regen_attempts", 0) < 1:
             reason = ""
-            if score < 7.0:
-                reason = f"评分 {score}/10 < 7.0"
-            elif not publish_ready and score < 8.0:
+            # 与 Critic 宽松口径对齐：仅极低分或「低分且未达展陈」才重生，避免略严即打回
+            if score < 6.0:
+                reason = f"评分 {score}/10 < 6.0"
+            elif not publish_ready and score < 6.5:
                 reason = f"评分 {score}/10 · publish_ready=false"
             if reason:
                 print(f"   🔄 {reason}，触发 Builder 重新生成")
@@ -598,7 +599,8 @@ class FullOrchestrator:
 {_build_code_inherit_block(use_chain, prev_code)}
 
 【技术规范（精简）】
-- 已引入 THREE（r128），直接使用。renderer.domElement 插入 `getElementById('canvas-container')`。
+- 已引入全局 `THREE`（Three.js r160，与 evolution 页 `three.min.js` 一致）。`renderer.domElement` 插入 `getElementById('canvas-container')`。
+- 推荐在 `WebGLRenderer` 创建后设置：`renderer.outputColorSpace = THREE.SRGBColorSpace`（色彩与显示器一致；不设通常也可运行）。
 - 必须有 Scene + PerspectiveCamera + WebGLRenderer + animate()（含 requestAnimationFrame + renderer.render）+ resize 监听。
 - 输出纯 JavaScript，不含 HTML / Markdown / `<script>` 标签。
 - 零外部依赖：禁止 OrbitControls、任何 Loader（GLTF/Font/Texture/Cube）、EffectComposer。
@@ -609,11 +611,13 @@ class FullOrchestrator:
 - Points 粒子 ≤ 4000；单 InstancedMesh ≤ 1200，全部 InstancedMesh 合计 ≤ 2500。
 - 禁止同时叠加多种「海量实例」系统。
 
-【r128 兼容（精简）】
+【Three r160 兼容（精简）】
 - 禁止 ShaderMaterial / RawShaderMaterial / 自定义 GLSL，只用内置材质，顶点动画在 JS animate 循环中计算。
 - 禁止 THREE.Geometry / Face3 / fromGeometry()，只用 BufferGeometry + setAttribute。
-- material.color 用 `.setHex()` / `.set()`，不可直接赋数字；MeshPhysicalMaterial 的 sheen 必须是 `THREE.Color`，禁止 thickness 属性。
-- 修改 sheen / clearcoat 等高级属性前先做非空判断（`if (material.sheen) {{ ... }}`）。
+- material.color / emissive 用 `.setHex()` / `.set()`，不可对 Color 类属性直接赋裸数字。
+- MeshPhysicalMaterial（r160）：`sheen` 为 **0～1 数值**；`sheenColor` 用 `new THREE.Color()` 或 `.setHex()`。**禁止**把 `THREE.Color` 赋给 `sheen`。尽量不要用 `transmission`+`thickness` 薄玻璃栈（易与光照不匹配）；非需要时不要设 `thickness`。
+- **禁止** `renderer.outputEncoding`、`THREE.sRGBEncoding`、`THREE.LinearEncoding` 等已移除 API；统一用 `renderer.outputColorSpace = THREE.SRGBColorSpace`。
+- 对 `sheenColor`、`clearcoatNormalMap` 等调用 `.copy`/`.setHex` 前，确认材质实例上该属性存在。
 
 【输出格式】
 不要输出 JSON。将完整 Three.js 代码写在 ```javascript 和 ``` 之间。"""
@@ -648,12 +652,13 @@ class FullOrchestrator:
 3. 使用了 OrbitControls / GLTFLoader 等未引入依赖 → 删除相关代码
 4. 使用了 ShaderMaterial / 自定义 GLSL → 替换为内置材质，将动画移至 JS 循环
 5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute
-6. material.color = 数字 → .setHex()；sheen 必须是 THREE.Color；删除 thickness
-7. 混入了 HTML / Markdown / `<script>` 标签 → 删除
-8. 明显语法错误：括号不匹配、变量未声明、代码被截断 → 补全闭合
-9. 交互监听（mousemove / pointermove / touch / wheel / keydown）→ 移除
-10. undefined 调用：对可能不存在的属性（sheen, clearcoat 等）调用方法前加非空判断
-11. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
+6. 使用了 renderer.outputEncoding / sRGBEncoding / LinearEncoding → 删除，改为 renderer.outputColorSpace = THREE.SRGBColorSpace
+7. material.color = 数字 → .setHex()；MeshPhysicalMaterial：`sheen` 应为数值，`sheenColor` 用 Color/setHex；勿把 Color 赋给 `sheen`；无薄玻璃需求时不要滥用 transmission/thickness
+8. 混入了 HTML / Markdown / `<script>` 标签 → 删除
+9. 明显语法错误：括号不匹配、变量未声明、代码被截断 → 补全闭合
+10. 交互监听（mousemove / pointermove / touch / wheel / keydown）→ 移除
+11. undefined 调用：对可能不存在的属性（sheenColor、clearcoatNormalMap 等）调用方法前加存在性判断
+12. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
 
 如果**没有发现任何崩溃问题**，直接输出原始代码不做任何修改。
 
@@ -706,23 +711,25 @@ class FullOrchestrator:
         print("🔍 [6/6] 艺术评审...")
         self._emit("critic", "start", iteration)
 
-        prompt = f"""评审本次迭代作品。请**同时**关注：
-1. 形式是否独特，是否摆脱俗套 demo 感
-2. 代码实现是否真正有多层视觉、动态色彩、可感知的动画速度
+        prompt = f"""评审本次迭代作品。原则：**偏宽容、看整体可展陈潜力**，不要拿「美术馆终审」标准卡生成艺术；代码统计仅供参考，**勿**因缺 .setHSL 或几何体种类数少就压分。
+
+1. 概念与画面气质是否大致咬合（允许执行粗糙）
+2. 是否至少有**一处**可感知亮点：动效、光影层次、独特点线面构成、色彩氛围其一即可
 
 概念：{result1.get('concept', '')[:80]}
 视觉：{result3.get('visual_style_summary', '')}
 {code_summary}
 
-评分参考：
-- 9-10 分：形式前卫、动画丰富、色彩动态、多层视觉、即可展陈
-- 7-8 分：概念好但实现有缺陷（如动画太慢、单色、单层几何体）
-- 5-6 分：套路化 demo 或实现严重偏离概念
+评分参考（整体分数**宁高勿低**，除非明确翻车）：
+- 8.5-10：有辨识度、能站住展陈；不必完美
+- 7.0-8.4：诚意够、能跑能看，有瑕疵也**正常给 7.5+**，勿因「不够前卫」硬压到 6 段
+- 5.0-6.9：明显套路空壳、几乎静止无设计、或与概念**严重**脱节才给这段
 
-**publish_ready（放宽，勿过严）**：
-- `true`：**总分 ≥ 8.0** 且作品**整体可展陈**——概念与形式基本咬合、不是明显套模板 demo 即可；**不要求**同时满足「多层几何 + 动态色彩 + 强动画」三件套，有**任一侧**（独特形式 / 可见动效 / 光影或色彩层次）站得住即可给 `true`。
-- **总分 ≥ 8.5** 时，除非有**硬伤**（严重跑题、纯占位几何、几乎静止且无设计感），否则**应倾向 `true`**。
-- `false`：总分 **< 7.5**，或 **7.5–7.9** 且实现明显拖后腿（套路、静止、与概念脱节）；**不要**只因「还能再 polish」就判 `false`。
+**publish_ready（再放宽）**：
+- `true`：**总分 ≥ 7.0** 即可倾向 `true`，只要**不是**纯占位几何 + 完全无动势/无氛围；**禁止**因「少一层粒子」「没写 setHSL」就判 `false`。
+- **总分 ≥ 7.5**：默认 `true`，除非有硬伤（严重跑题、像未完成的灰盒）。
+- **总分 ≥ 8.0**：**应当 `true`**，除非极个别硬伤。
+- `false`：仅当总分 **< 6.5**，或 **6.5–6.9** 且确认是套路空壳/严重脱节；**不要**因「还能再 polish」或「不够惊艳」判 `false`。
 
 请输出 JSON 格式：
 ```json
@@ -844,6 +851,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
 
 const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);

@@ -541,10 +541,10 @@
                     var p = (uv - 0.5) * 2.0;
                     p.x *= res.x / res.y;
 
-                    // Background tide: slow undulation even without face
+                    // Background tide：与脸无关，略加强以保证脸外区域始终有慢流动感
                     let tide = vec2<f32>(
-                        sin(uniforms.time * 0.12 + p.y * 0.3) * 0.008,
-                        cos(uniforms.time * 0.09 + p.x * 0.25) * 0.006
+                        sin(uniforms.time * 0.12 + p.y * 0.3) * 0.011,
+                        cos(uniforms.time * 0.09 + p.x * 0.25) * 0.0085
                     );
                     p = p + tide;
 
@@ -618,18 +618,29 @@
                     let faceIn = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
                     let flowBoost = 0.88 * faceIn;
                     let emotionFlow = max(0.88, 1.0 + uniforms.emotion_joy * 0.18 - uniforms.emotion_calm * 0.12);
-                    let flowSpeedMult = mix(1.0, 1.0 + flowBoost, sb) * emotionFlow;
-                    let t = uniforms.time * (0.92 + uniforms.motion * 0.22 * cnLVis) * flowSpeedMult;
+                    // 脸外流体：情绪不整体加速；远场相位略快于脸周，避免「只有脸附近在动」
+                    let faceFluidW = clamp(max(faceIn, cnLVis * 0.52), 0.0, 1.0);
+                    let farFluid = 1.0 - faceFluidW;
+                    let emotionFlowGlobal = mix(1.0, emotionFlow, mix(0.06, 1.0, faceFluidW));
+                    let flowSpeedMult = mix(1.0, 1.0 + flowBoost, sb) * emotionFlowGlobal;
+                    let t = uniforms.time * mix(1.05 + uniforms.motion * 0.06, 0.92 + uniforms.motion * 0.22 * cnLVis, faceFluidW) * flowSpeedMult;
+
+                    // 远场不受 silhouette 渐显「砍半」；近脸/轮廓仍保留原 sb 柔化，避免进出画时跳变
+                    let sbWiggle = mix(mix(0.5, 1.0, sb), 1.0, farFluid);
+                    let ampNear = uniforms.motion * 0.002 * cnLVis + cnLVis * 0.004 + uniforms.emotion_tension * 0.025 * cnLVis;
+                    let amp = (0.0035 + ampNear + farFluid * 0.0028) * flowSpeedMult * sbWiggle;
 
                     p = p + vec2<f32>(
                         sin((p.y + t) * 3.4 + cnLVis * 3.7),
                         cos((p.x - t) * 3.2 - cnLVis * 3.2)
-                    ) * (0.0024 + uniforms.motion * 0.002 * cnLVis + cnLVis * 0.004 + uniforms.emotion_tension * 0.025 * cnLVis) * flowSpeedMult * mix(0.5, 1.0, sb);
+                    ) * amp;
                     
+                    let sbFbm = mix(mix(0.45, 1.0, sb), 1.0, farFluid);
+                    let pFbmWarp = 0.025 * cnLVis * flowSpeedMult * sbFbm + farFluid * 0.018 * flowSpeedMult;
                     let pFbm = p + vec2<f32>(
                         fbm(p * 0.48 + vec2<f32>(cnLVis * 0.4, 0.0)),
                         fbm(p * 0.48 + vec2<f32>(0.0, cnLVis * 0.4))
-                    ) * (0.025 * cnLVis * flowSpeedMult * mix(0.45, 1.0, sb));
+                    ) * pFbmWarp;
 
                     let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
                     let r = vec2<f32>(
@@ -689,12 +700,14 @@
                         outRgb += vec3<f32>(0.04, 0.28, 0.38) * ringIntensity * 0.45;
                     }
 
-                    // Global emotion color influence (visible across entire canvas, not just face)
+                    // 情绪色偏：主要贴在脸内与轮廓邻域；全屏仅保留微弱泄漏（避免脸外流体被情绪染色）
                     let emoSb = clamp(sb, 0.0, 1.0);
-                    outRgb = outRgb + vec3<f32>(0.07, 0.025, -0.02) * uniforms.emotion_joy * emoSb;
-                    outRgb = outRgb + vec3<f32>(-0.02, 0.005, 0.07) * uniforms.emotion_tension * emoSb;
-                    outRgb = outRgb + vec3<f32>(0.055, 0.055, 0.06) * uniforms.emotion_surprise * emoSb;
-                    outRgb = outRgb * (1.0 - uniforms.emotion_calm * 0.12 * emoSb);
+                    let emoLocal = clamp(max(faceIn, cnLVis * 0.5), 0.0, 1.0);
+                    let emoTintW = mix(0.07, 1.0, emoLocal) * emoSb;
+                    outRgb = outRgb + vec3<f32>(0.07, 0.025, -0.02) * uniforms.emotion_joy * emoTintW;
+                    outRgb = outRgb + vec3<f32>(-0.02, 0.005, 0.07) * uniforms.emotion_tension * emoTintW;
+                    outRgb = outRgb + vec3<f32>(0.055, 0.055, 0.06) * uniforms.emotion_surprise * emoTintW;
+                    outRgb = outRgb * (1.0 - uniforms.emotion_calm * 0.12 * mix(0.08, 1.0, emoLocal) * emoSb);
 
                     return vec4<f32>(outRgb, 1.0);
                 }
