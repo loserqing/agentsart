@@ -1104,10 +1104,15 @@
                 const observerCard = document.getElementById('agent-observer');
                 const statusText = observerCard.querySelector('.status-text');
                 const st = data.face_analysis_status || 'idle';
+                /** 观演者高亮：与「服务端是否仍有缓存人脸截图」对齐，避免仅凭旧长文报告常亮 */
+                const hasFaceSnap = data.has_face_image === true;
+                function setObserverHighlight(on) {
+                    observerCard.classList.toggle('active', !!on);
+                }
 
                 if (st === 'error' && data.face_analysis_error) {
                     _lastRenderedReportText = null;
-                    observerCard.classList.add('active');
+                    setObserverHighlight(true);
                     statusText.textContent = 'Error';
                     analysisContent.innerHTML = `
                         <div class="analysis-panel-stack">
@@ -1123,7 +1128,7 @@
 
                 if (data.last_analysis_report) {
                     const busy = st === 'analyzing';
-                    observerCard.classList.add('active');
+                    setObserverHighlight(hasFaceSnap || busy || st === 'error');
                     statusText.textContent = busy ? 'Outputting...' : 'Observing...';
                     if (data.last_analysis_report === _lastRenderedReportText) return;
                     _lastRenderedReportText = data.last_analysis_report;
@@ -1142,7 +1147,7 @@
                 }
 
                 _lastRenderedReportText = null;
-                observerCard.classList.toggle('active', st === 'analyzing');
+                setObserverHighlight(hasFaceSnap || st === 'analyzing' || st === 'error');
                 if (st === 'analyzing') {
                     statusText.textContent = 'Analyzing face...';
                     analysisContent.innerHTML = `

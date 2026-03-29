@@ -34,8 +34,9 @@ export class VisionSystem {
             },
             runningMode: 'VIDEO',
             numFaces: 1,
-            minFaceDetectionConfidence: 0.55,
-            minTrackingConfidence: 0.62,
+            // 略提高阈值，减少手掌/织物等误检为人脸（误检会导致服务端长期不触发 clear）
+            minFaceDetectionConfidence: 0.62,
+            minTrackingConfidence: 0.65,
             outputFaceBlendshapes: true,
             outputFacialTransformationMatrixes: false,
         });
@@ -115,9 +116,30 @@ export class VisionSystem {
      * 仅在人脸 landmark 有效时截取人脸区域；无人脸时不截图（不回落到全画面），避免空景/误检帧进入分析。
      * @returns {string|null} JPEG data URL 或 null
      */
+    /**
+     * 误检脸（如手掌）常见：框极扁/极长或过小，与真人脸比例差异大。
+     */
+    _faceLandmarksBBoxLooksPlausible(face) {
+        let minX = 1, minY = 1, maxX = 0, maxY = 0;
+        for (const pt of face) {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
+        }
+        const w = maxX - minX;
+        const h = maxY - minY;
+        if (w < 0.07 || h < 0.1) return false;
+        const ar = w / Math.max(h, 1e-6);
+        // 正脸略竖椭圆；侧脸可更窄。手掌误检常出现过宽或过扁
+        if (ar < 0.38 || ar > 1.55) return false;
+        return true;
+    }
+
     captureFrame() {
         const face = this.sharedData.face;
         if (!face || face.length < 10) return null;
+        if (!this._faceLandmarksBBoxLooksPlausible(face)) return null;
 
         const maxRes = 512;
         const vw = this.video.videoWidth;

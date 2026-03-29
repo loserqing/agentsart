@@ -112,7 +112,7 @@
     </div>
 
     <script type="module">
-        import { VisionSystem } from './js/vision_capture.js?v=20260328u';
+        import { VisionSystem } from './js/vision_capture.js?v=20260329a';
 
         // --- Global State ---
         let visionSystem = null;
@@ -133,9 +133,16 @@
 
         /** 轮询服务端状态（badge、关键词闪现等） */
         const STATUS_POLL_MS = 500;
-        /** 无人脸持续帧数超过此值则清空服务端/本地截图与人类分析（约 1.5s @60fps） */
+        /** 无人脸持续帧数超过此值则清空服务端/本地截图与人类分析（≈1.5s@60fps / ≈3s@30fps） */
         const NO_FACE_FRAMES_CLEAR = 90;
+        /**
+         * 仍有 landmark 但「清晰度」长期不达标（遮挡/误检手掌等）也清空，避免服务端卡死在上一张真脸截图上
+         */
+        const LOW_QUALITY_FRAMES_CLEAR = 60;
+        const LOW_QUALITY_CLEAR_BELOW = 0.42;
+        const LOW_QUALITY_STREAK_RESET_ABOVE = 0.52;
         let noFaceStreak = 0;
+        let lowQualityStreak = 0;
         let sawFaceThisSession = false;
         let presenceClearInFlight = false;
         let lastPollFaceCenter = null;
@@ -895,6 +902,37 @@
             if (noFaceStreak === NO_FACE_FRAMES_CLEAR) {
                 sawFaceThisSession = false;
                 noFaceStreak = 0;
+                lowQualityStreak = 0;
+                void clearPresenceBecauseNoFace();
+            }
+        }
+
+        /**
+         * 用手/物体挡镜头时 MediaPipe 仍可能返回 landmark，tickNoFacePresence 不会计数。
+         * 与 computeHeadshotQuality 联动：长期低分则与「无人脸」同等清空服务端截图。
+         */
+        function tickLowQualityFaceClear() {
+            const hasLandmarks = sharedData.face && sharedData.face.length > 10;
+            if (!hasLandmarks) {
+                lowQualityStreak = 0;
+                return;
+            }
+            if (!sawFaceThisSession) return;
+
+            const q = computeHeadshotQuality();
+            if (q >= LOW_QUALITY_STREAK_RESET_ABOVE) {
+                lowQualityStreak = 0;
+                return;
+            }
+            if (q <= LOW_QUALITY_CLEAR_BELOW) {
+                lowQualityStreak++;
+            } else {
+                lowQualityStreak = Math.max(0, lowQualityStreak - 1);
+            }
+            if (lowQualityStreak >= LOW_QUALITY_FRAMES_CLEAR) {
+                lowQualityStreak = 0;
+                noFaceStreak = 0;
+                sawFaceThisSession = false;
                 void clearPresenceBecauseNoFace();
             }
         }
@@ -1104,6 +1142,7 @@
             webgpuDevice.queue.submit([commandEncoder.finish()]);
 
             tickNoFacePresence();
+            tickLowQualityFaceClear();
         }
 
 
