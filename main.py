@@ -522,6 +522,37 @@ def _generate_face_analysis_sync(image_bytes: bytes):
     )
 
 
+def _clamp_metrics_cyborg_survival_consistency(metrics: dict) -> dict:
+    """
+    赛博格化低时，综合生存指数不得虚高（与 prompts 中数值一致性一致；模型偶发违背时由服务端收敛）。
+    规则：ai_survival <= cyborg + 10；若 cyborg < 35，则 ai_survival <= min(50, cyborg + 8)。
+    """
+    if not isinstance(metrics, dict):
+        return metrics
+    out = dict(metrics)
+    try:
+        c = float(out.get("cyborgization_pct", 0))
+        s = float(out.get("ai_survival_pct", 0))
+    except (TypeError, ValueError):
+        return metrics
+    c = max(0.0, min(100.0, c))
+    s = max(0.0, min(100.0, s))
+    cap = min(100.0, c + 10.0)
+    if c < 35:
+        cap = min(cap, min(50.0, c + 8.0))
+    s = min(s, cap)
+    out["cyborgization_pct"] = int(round(c))
+    out["ai_survival_pct"] = int(round(s))
+    if "aesthetic_entropy" in out:
+        try:
+            out["aesthetic_entropy"] = int(
+                round(max(0.0, min(100.0, float(out["aesthetic_entropy"]))))
+            )
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
 def _run_face_analysis(image_b64: str) -> dict | None:
     """
     对已缓存的 base64 人脸图执行 Gemini 分析，返回解析后的字典
@@ -563,6 +594,7 @@ def _run_face_analysis(image_b64: str) -> dict | None:
             human_metrics = analysis_json.get("metrics") or {}
             if not isinstance(human_metrics, dict):
                 human_metrics = {}
+            human_metrics = _clamp_metrics_cyborg_survival_consistency(human_metrics)
         except json.JSONDecodeError:
             summary = (analysis_text or "").strip()
             director_influence = summary[:50] if summary else ""

@@ -997,7 +997,10 @@
             const h = getStableHash(data.last_analysis_report || '');
             const aestheticEntropy = m.aesthetic_entropy != null ? m.aesthetic_entropy : (h % 60 + 40);
             const cyborgization = m.cyborgization_pct != null ? m.cyborgization_pct : ((h >> 3) % 90 + 10);
-            const aiSurvival = m.ai_survival_pct != null ? m.ai_survival_pct : ((h >> 6) % 80 + 20);
+            let aiSurvival = m.ai_survival_pct != null ? m.ai_survival_pct : ((h >> 6) % 80 + 20);
+            let capSurvival = Math.min(100, cyborgization + 10);
+            if (cyborgization < 35) capSurvival = Math.min(capSurvival, Math.min(50, cyborgization + 8));
+            aiSurvival = Math.min(aiSurvival, capSurvival);
             return `
                 <div class="metrics-bar">
                     ${buildMetricRingSvg(aestheticEntropy, 100, '美学熵值 / Aesthetic Entropy')}

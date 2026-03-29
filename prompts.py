@@ -33,10 +33,19 @@ AVATAR_ANALYSIS_PROMPT = """
 2. "director_influence"： string。subject_present 为 false 时必须 `""`；为 true 时 **50 字以内**。
 3. "creative_keywords"： string 数组。subject_present 为 false 时必须 `[]`；为 true 时 **2～3 条**，规则同前。
 4. "metrics"： object（subject_present 为 false 时可 `{"aesthetic_entropy":0,"cyborgization_pct":0,"ai_survival_pct":0}`）。
+   - **"aesthetic_entropy"**（0–100）：妆发、光线、构图中的「美学噪点/秩序」综合感。
+   - **"cyborgization_pct"**（0–100）：从可见特征推断的**数字化/增强/与界面·算法共生**的潜质——眼镜与反光、屏幕色温映脸、妆造的「界面感」、气质上的精密或耦合感等；**纯湿件、低增强**时须给**低分**。
+   - **"ai_survival_pct"**（0–100）：**AI 深度嵌入认知与生产**的时代里，维持协作与主体性的**综合生存指数**。
+   - **数值一致性（必守，不可违背）**：生存指数与赛博格化须**同向**。**严禁**赛博格化很低却生存指数很高（逻辑上无法自洽）。
+     · 恒满足：**`ai_survival_pct ≤ cyborgization_pct + 10`**（整数）。
+     · 若 **`cyborgization_pct < 35`**，则还须 **`ai_survival_pct ≤ min(50, cyborgization_pct + 8)`**。
+     · 赛博格化低时，生存指数通常应**等于或略低于**赛博格化亦可（湿件依赖高、协议未升级）。
 
 **JSON 形状示例（有人脸）**：
-{"subject_present":true,"summary":"……","director_influence":"……","creative_keywords":["……"],"metrics":{"aesthetic_entropy":64,"cyborgization_pct":38,"ai_survival_pct":71}}
+{"subject_present":true,"summary":"……","director_influence":"……","creative_keywords":["……"],"metrics":{"aesthetic_entropy":64,"cyborgization_pct":38,"ai_survival_pct":45}}
 
 **JSON 形状示例（无人脸）**：
 {"subject_present":false,"summary":"当前画面未见可辨认人脸，仅为室内失焦场景。","director_influence":"","creative_keywords":[],"metrics":{"aesthetic_entropy":0,"cyborgization_pct":0,"ai_survival_pct":0}}
+
+（注意：有人脸示例中 `ai_survival_pct` 未高于 `cyborgization_pct+10`，低赛博格时勿给高生存分。）
 """

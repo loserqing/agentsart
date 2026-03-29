@@ -182,7 +182,7 @@ Analyze uploaded face image / 分析上传的人脸图像
   "metrics": {
     "aesthetic_entropy": 64,
     "cyborgization_pct": 38,
-    "ai_survival_pct": 71
+    "ai_survival_pct": 45
   }
 }
 ```

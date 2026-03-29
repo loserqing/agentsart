@@ -258,7 +258,10 @@ class FullOrchestrator:
 
     def _validate_js(self, code: str) -> tuple:
         """Return (is_valid, error_message). Uses Node.js when available, falls back to bracket matching."""
-        if not code or len(code.strip()) < 80:
+        if not code:
+            return False, "Code is too short or empty"
+        code = code.lstrip("\ufeff").strip()
+        if len(code) < 80:
             return False, "Code is too short or empty"
 
         try:
@@ -314,6 +317,19 @@ class FullOrchestrator:
             return False, f"Unclosed brackets: {len(stack)} remaining ({''.join(stack[-8:])})"
         return True, ""
 
+    def _coerce_llm_js_response(self, raw: str, fallback: str) -> str:
+        """从修复器 LLM 输出中提取 JS；优先 fenced 代码块，其次整段去围栏（避免空提取导致白跑一轮）。"""
+        extracted = self._extract_js_code(raw)
+        if extracted:
+            return extracted.lstrip("\ufeff").strip()
+        t = (raw or "").strip()
+        if t.startswith("```"):
+            t = re.sub(r"^```(?:javascript|js)?\s*", "", t, count=1, flags=re.IGNORECASE)
+            t = re.sub(r"\s*```\s*$", "", t).strip()
+            if "THREE." in t and len(t) >= 80:
+                return t.lstrip("\ufeff").strip()
+        return fallback.lstrip("\ufeff").strip() if fallback else ""
+
     def _node_syntax_guard(self, state: PipelineState) -> dict:
         code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
         valid, err = self._validate_js(code)
@@ -363,9 +379,9 @@ class FullOrchestrator:
         code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
         error = state.get("syntax_error", "")
 
-        prompt = f"""以下 Three.js 代码存在语法错误，请修复并输出完整可运行代码。
+        prompt = f"""以下代码在 **JavaScript 解析阶段**校验失败（等价于用 `new Function(code)` 做语法检查）。你的任务是把它修到 **能通过解析**，不是排查 WebGL 运行时问题。
 
-【语法错误信息】
+【校验失败信息（来自 Node 解析或括号扫描）】
 {error}
 
 【原始代码】
@@ -373,14 +389,23 @@ class FullOrchestrator:
 {code}
 ```
 
+【职责边界】
+- **本会话只处理**：`Unexpected token`、`Unexpected end of input`、未闭合的 `'` / `"` / `` ` ``、注释未闭合、`import`/`export` 顶层语句（须删或改写，本环境为脚本片段无打包器）、重复 `const`/`let` 等同作用域声明、括号/大括号不匹配。
+- **本会话不处理**（勿臆测大改材质/渲染）：浏览器控制台里的 **WebGL / `uniform3fv` / @@iterator** 等 **运行时**错误——那由生成规范与 Reviewer 规避；此处 **禁止** 为「可能跑不起来」而整段重写 Three 场景。
+
 【修复要求】
-1. 最可能的问题是代码被截断，缺少闭合的大括号/小括号/分号。检查并补全所有未闭合的 {{ }}, ( ), 函数定义与 animate 循环。
-2. 确保代码末尾有完整的 `animate()` 调用和 `window.addEventListener('resize', ...)` 监听。
-3. 不要删减核心功能逻辑，只做语法修复和补全。
-4. 输出完整代码，用 ```javascript 和 ``` 包裹。"""
+1. 优先检查 **截断**：补全未闭合的 {{ }}、( )、[ ]、模板字符串与多行注释。
+2. 确保末尾仍有 **`animate()` 调用**（或等价的 `requestAnimationFrame` 启动）与 **`resize` 监听**（若原文已有则保留）。
+3. 保持 **全局 `THREE`**、**无 import/export**、**domElement 挂到 `canvas-container`**；只做解析/结构修复，不删减主体创意逻辑。
+4. **InstancedMesh + `setColorAt`**：若原文已有实例色逻辑但缺 `instanceColor` 预分配，可 **仅补** `InstancedBufferAttribute` + `DynamicDrawUsage`（属防崩溃小补全）；勿借机重写整套材质。
+5. 输出 **完整** 代码，且 **必须** 用 ```javascript 与 ``` 包裹（便于流水线提取）。
+
+【Three r160 脚本体约束（避免修完仍解析失败）】
+- 不要使用 `import` / `export`；不要写 `<script>` 或 HTML。
+- 避免把 **Markdown 反引号或说明文字** 粘进 JS 字符串外。"""
 
         raw = self._llm_call(prompt, code_mode=True)
-        fixed = _clamp_animation_speeds_in_js(self._extract_js_code(raw) or code)
+        fixed = _clamp_animation_speeds_in_js(self._coerce_llm_js_response(raw, code))
 
         result = dict(state.get("reviewer") or state.get("builder") or {})
         result["threejs_code"] = fixed
@@ -614,10 +639,13 @@ class FullOrchestrator:
 【Three r160 兼容（精简）】
 - 禁止 ShaderMaterial / RawShaderMaterial / 自定义 GLSL，只用内置材质，顶点动画在 JS animate 循环中计算。
 - 禁止 THREE.Geometry / Face3 / fromGeometry()，只用 BufferGeometry + setAttribute。
-- material.color / emissive 用 `.setHex()` / `.set()`，不可对 Color 类属性直接赋裸数字。
-- MeshPhysicalMaterial（r160）：`sheen` 为 **0～1 数值**；`sheenColor` 用 `new THREE.Color()` 或 `.setHex()`。**禁止**把 `THREE.Color` 赋给 `sheen`。尽量不要用 `transmission`+`thickness` 薄玻璃栈（易与光照不匹配）；非需要时不要设 `thickness`。
+- `color` / `emissive` / `sheenColor` 等：构造参数里用 `new THREE.Color(0x……)` 或 `.setHex()` / `.set()`；animate 里对已有 Color 再 `.copy()` / `.setHSL()`。避免把「应持续为 Color 对象」的属性改成裸数字或普通对象（易在 uniform 上传时报错）。
+- **InstancedMesh（含 `setColorAt` / `vertexColors` / 每帧改实例色）**：主体材质**优先 `MeshStandardMaterial`**（metalness / roughness / emissive 即可做出金属与高光感）。**规避** `MeshPhysicalMaterial` + **`sheen > 0`**（及 `sheenColor` / `sheenRoughness`）与该组合同用——在部分 WebGL2 上会触发 **`uniform3fv` /「@@iterator」类 TypeError**（与 r160 引擎 + 升级后 shader 路径有关）。若必须用 Physical（如 clearcoat）且带实例色，则 **`sheen` 必须为 0** 且不传 sheen 相关色参。
+- 非 Instanced、单体 Mesh 使用 `MeshPhysicalMaterial` 时：`sheen` 为 **0～1 数值**；`sheenColor` 用 `new THREE.Color()`。**禁止**把 `THREE.Color` 赋给 `sheen`。尽量不要用 `transmission`+`thickness` 薄玻璃栈（易与光照不匹配）；非需要时不要设 `thickness`。
 - **禁止** `renderer.outputEncoding`、`THREE.sRGBEncoding`、`THREE.LinearEncoding` 等已移除 API；统一用 `renderer.outputColorSpace = THREE.SRGBColorSpace`。
 - 对 `sheenColor`、`clearcoatNormalMap` 等调用 `.copy`/`.setHex` 前，确认材质实例上该属性存在。
+- **InstancedMesh 每帧 `setColorAt`**：须在首帧前创建 `instanceColor`（`new THREE.InstancedBufferAttribute(new Float32Array(count*3), 3)`）并 `setUsage(THREE.DynamicDrawUsage)`，勿依赖首次 `setColorAt` 隐式创建（易在 WebGL2 上与 uniform 路径叠加出问题）。
+- **版本对齐**：生成代码须与页内 **Three.js r160（three.min.js）** 一致；勿混用其它大版本的 API（升级/换 CDN 后常见「能编译、渲染期 uniform 崩」）。
 
 【输出格式】
 不要输出 JSON。将完整 Three.js 代码写在 ```javascript 和 ``` 之间。"""
@@ -653,12 +681,13 @@ class FullOrchestrator:
 4. 使用了 ShaderMaterial / 自定义 GLSL → 替换为内置材质，将动画移至 JS 循环
 5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute
 6. 使用了 renderer.outputEncoding / sRGBEncoding / LinearEncoding → 删除，改为 renderer.outputColorSpace = THREE.SRGBColorSpace
-7. material.color = 数字 → .setHex()；MeshPhysicalMaterial：`sheen` 应为数值，`sheenColor` 用 Color/setHex；勿把 Color 赋给 `sheen`；无薄玻璃需求时不要滥用 transmission/thickness
+7. material.color / emissive 等误赋裸数字破坏 Color → 改为 `new THREE.Color()` / `.setHex()`；MeshPhysicalMaterial：`sheen` 应为数值，`sheenColor` 用 Color；勿把 Color 赋给 `sheen`；无薄玻璃需求时不要滥用 transmission/thickness
 8. 混入了 HTML / Markdown / `<script>` 标签 → 删除
 9. 明显语法错误：括号不匹配、变量未声明、代码被截断 → 补全闭合
 10. 交互监听（mousemove / pointermove / touch / wheel / keydown）→ 移除
 11. undefined 调用：对可能不存在的属性（sheenColor、clearcoatNormalMap 等）调用方法前加存在性判断
-12. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
+12. InstancedMesh 使用 `setColorAt`（或 `vertexColors` + 每帧改实例色）→ 须预分配 `instanceColor`（`InstancedBufferAttribute`）+ `DynamicDrawUsage`。若同时 **`MeshPhysicalMaterial` + `sheen > 0`**（或显式 `sheenColor`/`sheenRoughness`）→ 改为 **`MeshStandardMaterial`**，或保留 Physical 时 **`sheen: 0`** 并去掉 sheen 色参（规避 WebGL2 上 `uniform3fv` / @@iterator 运行时错误）
+13. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
 
 如果**没有发现任何崩溃问题**，直接输出原始代码不做任何修改。
 
