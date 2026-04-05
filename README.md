@@ -1,8 +1,10 @@
-# AgentsArt 🎭
+# 幻棱 Phantaprism 🎭
 
 > **AI-Driven Generative Art System** — Facial analysis powered iterative creation, exploring the aesthetic boundary between carbon observers and silicon algorithms
 >
 > **AI 驱动的生成艺术系统** — 通过面部分析驱动迭代创作，探索碳基观测者与硅基算法的美学边界
+>
+> 幻 — AI 生成的抽象幻象 | 棱 — 多面折射，层层转化
 
 <div align="center">
 
@@ -18,9 +20,9 @@
 
 ## 🌌 Overview / 项目简介
 
-**AgentsArt** is a cyberpunk-styled AI generative art system. It captures human faces through cameras, uses **Gemini AI** for deep facial analysis, then drives a multi-agent workflow to generate iterative artworks.
+**幻棱 (Phantaprism)** is a cyberpunk-styled AI generative art system. It captures human faces through cameras, uses **Gemini AI** for deep facial analysis, then drives a multi-agent workflow to generate iterative abstract artworks — like a prism refracting human essence into algorithmic phantoms.
 
-**AgentsArt** 是一个赛博朋克风格的 AI 生成艺术系统。它通过摄像头捕捉人脸，使用 **Gemini AI** 进行深度面部分析，然后驱动多智能体工作流生成迭代艺术作品。
+**幻棱** 是一个赛博朋克风格的 AI 生成艺术系统。它通过摄像头捕捉人脸，使用 **Gemini AI** 进行深度面部分析，然后驱动多智能体工作流生成迭代抽象艺术作品——如同棱镜将人类本质折射为算法幻象。
 
 ### Core Features / 核心特性
 
@@ -36,7 +38,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     AgentsArt System                        │
+│                   幻棱 Phantaprism System                       │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
 │  │   Frontend  │───▶│  FastAPI     │───▶│   Gemini AI   │  │
@@ -257,9 +259,9 @@ MIT License - See [LICENSE](LICENSE) for details / 详见 [LICENSE](LICENSE)
 
 <div align="center">
 
-**AgentsArt** — Exploring the aesthetic boundary between carbon and silicon 🌌
+**幻棱 HuanLeng** — Exploring the aesthetic boundary between carbon and silicon 🌌
 
-**AgentsArt** — 探索碳基与硅基的美学边界 🌌
+**幻棱** — 探索碳基与硅基的美学边界 🌌
 
 *Built with 🖤 by @loserqing*
 

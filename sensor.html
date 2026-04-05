@@ -461,6 +461,8 @@
                     emotion_tension: f32,
                     emotion_surprise: f32,
                     emotion_calm: f32,
+                    /** 裁员等外部标量（如 2026 人数），调制 tide/fbm 相位与偏移 */
+                    layoff_count: f32,
                 };
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
                 @group(0) @binding(1) var<storage, read> segments: array<vec4<f32>>;
@@ -552,16 +554,23 @@
                     // 必须与 segment_metrics / face_interior_winding 一致：线段端点用 toNdc，采样点不可用手写 (uv-0.5)（x 与 toNdc 差一个符号，会导致绕数与距离场错位、脸周流体随时间「胀开」）
                     var p = toNdc(uv, res);
 
-                    // Background tide：与脸无关，略加强以保证脸外区域始终有慢流动感
-                    let tide = vec2<f32>(
-                        sin(uniforms.time * 0.12 + uv.y * 0.3) * 0.011,
-                        cos(uniforms.time * 0.09 + uv.x * 0.25) * 0.0085
-                    );
-                    p = p + tide;
-
                     let nF = i32(uniforms.seg_face);
                     let dLo = i32(uniforms.seg_face_detail_lo);
                     let dHi = i32(uniforms.seg_face_detail_hi);
+                    let sb = clamp(uniforms.silhouette_blend, 0.0, 1.0);
+
+                    let lay = uniforms.layoff_count;
+                    let layPhase = fract(lay * 0.0000813472);
+                    let layWave = vec2<f32>(fract(lay * 0.000041), fract(lay * 0.000067)) * 6.28318;
+
+                    let insideUv = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
+                    let tideMul = mix(1.0, 0.28, insideUv);
+
+                    let tide = vec2<f32>(
+                        sin(uniforms.time * 0.12 + uv.y * 0.3 + layPhase * 4.2 + layWave.x) * 0.011,
+                        cos(uniforms.time * 0.09 + uv.x * 0.25 + layPhase * 3.1 + layWave.y) * 0.0085
+                    ) * tideMul;
+                    p = p + tide;
 
                     var acc = vec2<f32>(0.0, 0.0);
                     var nearLoose = 0.0;
@@ -585,7 +594,6 @@
                     nearLoose = nearLoose * uniforms.contour_fade;
                     nearTight = nearTight * uniforms.contour_fade;
 
-                    let sb = clamp(uniforms.silhouette_blend, 0.0, 1.0);
                     acc = acc * sb;
                     nearLoose = nearLoose * sb;
                     nearTight = nearTight * sb;
@@ -613,12 +621,13 @@
                     }
 
                     let wsum = max(length(acc), 1e-6);
-                    // 不向时间要振幅：避免 pullAmp 随 sin(time) 周期性改变等效「脸周影响半径」
                     let pullAmp = 0.0042 + uniforms.motion * 0.0032 + uniforms.presence * 0.0024;
-                    let drift = (acc / wsum) * pullAmp;
 
-                    // 脸内判定用 drift 前坐标：避免引力位移把边界像素判进脸内，叠 FBM 后有效「流体脸环」越跑越大
                     let pForFaceMask = p;
+                    let faceIn = face_interior_winding(pForFaceMask, nF) * uniforms.contour_fade * sb;
+                    let driftScale = mix(1.0, 0.48, faceIn);
+                    let drift = (acc / wsum) * pullAmp * driftScale;
+
                     p = p + drift;
                     let cnL = clamp(nearLoose * (1.02 + uniforms.presence * 0.16), 0.0, 1.0);
                     let lineA = clamp(uniforms.contour_line_alpha, 0.0, 1.0);
@@ -627,41 +636,42 @@
                     // 调试：去掉宽场 cnL 的范围光/晕染，仅保留窄带 cnT 用于细线
                     let cnLVis = cnL * (1.0 - dbg);
 
-                    let faceIn = face_interior_winding(pForFaceMask, nF) * uniforms.contour_fade * sb;
                     // 脸外流体：相位仅由 time + 空间权重驱动，不叠情绪缓变（否则长时间观感持续漂移）
                     let faceFluidW = clamp(max(faceIn, cnLVis * 0.52), 0.0, 1.0);
                     let farFluid = 1.0 - faceFluidW;
                     let t = uniforms.time * mix(1.05 + uniforms.motion * 0.06, 0.92 + uniforms.motion * 0.22 * cnLVis, faceFluidW);
 
+                    let flowMul = mix(1.0, 0.30, faceIn);
+
                     // 远场不受 silhouette 渐显「砍半」；近脸/轮廓仍保留原 sb 柔化，避免进出画时跳变
                     let sbWiggle = mix(mix(0.5, 1.0, sb), 1.0, farFluid);
                     let ampNear = uniforms.motion * 0.0016 * cnLVis + cnLVis * 0.0032 + uniforms.emotion_tension * 0.014 * cnLVis;
-                    let amp = (0.003 + ampNear + farFluid * 0.0025) * sbWiggle;
+                    let amp = (0.003 + ampNear + farFluid * 0.0025) * sbWiggle * flowMul;
 
                     p = p + vec2<f32>(
-                        sin((p.y + t) * 3.4 + cnLVis * 3.7),
-                        cos((p.x - t) * 3.2 - cnLVis * 3.2)
+                        sin((p.y + t * flowMul) * 3.4 + cnLVis * 3.7 + layWave.y * 0.15),
+                        cos((p.x - t * flowMul) * 3.2 - cnLVis * 3.2 - layPhase * 0.4)
                     ) * amp;
                     
                     let sbFbm = mix(mix(0.45, 1.0, sb), 1.0, farFluid);
-                    // 脸周域扭曲过强 + fbm 里对 time 线性偏移 → 长时间后采样域「卷」成折皱；改为有界振荡并降低级联系数
-                    let pFbmWarp = min(0.03, 0.014 * cnLVis * sbFbm + farFluid * 0.012);
+                    let pFbmWarp = min(0.03, (0.014 * cnLVis * sbFbm + farFluid * 0.012) * flowMul);
                     let pFbm = p + vec2<f32>(
-                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.32, 0.0)),
-                        fbm(p * 0.48 + vec2<f32>(0.0, cnLVis * 0.32))
+                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.32 + layWave.y * 0.04, layPhase * 0.06)),
+                        fbm(p * 0.48 + vec2<f32>(layPhase * 0.05, cnLVis * 0.32 + layWave.x * 0.04))
                     ) * pFbmWarp;
 
                     let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
+                    let tOscMul = mix(1.0, 0.45, faceIn);
                     let tOsc = vec2<f32>(
-                        sin(uniforms.time * 0.38) * 1.85,
-                        cos(uniforms.time * 0.33) * 1.85
-                    );
+                        sin(uniforms.time * 0.38 + layPhase * 2.1) * 1.85,
+                        cos(uniforms.time * 0.33 + layWave.x * 0.5) * 1.85
+                    ) * tOscMul;
                     let r = vec2<f32>(
                         fbm(pFbm + 3.05 * q + vec2<f32>(1.7, 9.2) + tOsc),
                         fbm(pFbm + 3.05 * q + vec2<f32>(8.3, 2.8) + vec2<f32>(tOsc.y * 0.85, tOsc.x * 0.85))
                     );
                     var f = fbm(pFbm + 3.05 * r);
-                    f = f * (1.0 - cnLVis * 0.06) + cnLVis * 0.038 * sin(f * 10.5 + sin(uniforms.time * 0.52) * 2.8);
+                    f = f * (1.0 - cnLVis * 0.06) + cnLVis * 0.038 * sin(f * 10.5 + sin(uniforms.time * 0.52 + layPhase * 1.7) * 2.8) * mix(1.0, 0.55, faceIn);
 
                     let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
                     let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
@@ -771,7 +781,9 @@
         let contourBreathPhase = 0;
         let ripplePhaseTimer = -10;
         let prevPresenceBelow = true;
-        const _uniformScratch = new Float32Array(27);
+        /** 与 WGSL Uniforms 顺序一致；[27]=layoff_count */
+        const LAYOFF_COUNT_FOR_SHADER = 40482;
+        const _uniformScratch = new Float32Array(28);
 
         function lerp(a, b, t) {
             return a + (b - a) * t;
@@ -1081,7 +1093,9 @@
             );
 
             const useLiveSeg = segTotal > 0;
-            const holdContourGeom = useLiveSeg || trackedContourLineAlpha > 0.014;
+            // 细线可先隐去，但仍保留脸廓折线直到 contour_fade 收尾，否则片元里 winding 瞬间为 0，
+            // tideMul/flowMul 等会立刻切回「全屏快流」，破坏进出画时的淡入淡出。
+            const holdContourGeom = useLiveSeg || trackedContourLineAlpha > 0.014 || trackedContourFade > 0.02;
             const contourDead = !holdContourGeom;
             const uNF = contourDead ? 0 : (useLiveSeg ? seg.nFace : persistNF);
             const uNL = contourDead ? 0 : (useLiveSeg ? seg.nLeft : persistNL);
@@ -1090,7 +1104,7 @@
             const uDetailLo = contourDead ? 0 : (useLiveSeg ? seg.segFaceDetailLo : persistDetailLo);
             const uDetailHi = contourDead ? 0 : (useLiveSeg ? seg.segFaceDetailHi : persistDetailHi);
             const srcSeg = useLiveSeg ? smoothSegScratch : persistScratch;
-            if (!contourDead && (useLiveSeg || trackedContourFade > 0.035 || trackedContourLineAlpha > 0.014)) {
+            if (!contourDead && (useLiveSeg || trackedContourFade > 0.02 || trackedContourLineAlpha > 0.014)) {
                 webgpuDevice.queue.writeBuffer(segmentBuffer, 0, srcSeg.buffer, 0, uByteLen);
             }
 
@@ -1137,6 +1151,7 @@
             _uniformScratch[24] = trackedEmotionTension;
             _uniformScratch[25] = trackedEmotionSurprise;
             _uniformScratch[26] = trackedEmotionCalm;
+            _uniformScratch[27] = LAYOFF_COUNT_FOR_SHADER;
             webgpuDevice.queue.writeBuffer(uniformBuffer, 0, _uniformScratch);
 
             // 渲染管线执行

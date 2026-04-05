@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="A transcendent field where carbon meets algorithm. It explores cognitive entropy's data echo, and how 'ghost protocols' push lifeforms to 'wetware fatigue,' a poetic structural collapse. Data poetics against chaotic order, revealing consciousness's fragile balance.
-
-超验场域，碳基与算法交织。探究数据熵增及幽灵协议如何牵引生命，直至湿件疲劳：能量结构诗意崩解。数据诗学对位混沌秩序，展露意识流脆弱平衡。">
-    <meta name="generator" content="AGENTSART - Iteration 7">
-    <meta name="created" content="2026-03-29 15:18">
+    <meta name="description" content="Algorithms sculpt existence, transforming life into resonant data. This exhibit explores AI's cold, emergent logic, a data poetics of being in chaotic digital order. | 算法雕塑存在，生命重构为共鸣数据。本展探讨AI冷峻的涌现逻辑，在混沌数字秩序中呈现数据存在诗学。">
+    <meta name="generator" content="AGENTSART - Iteration 1">
+    <meta name="created" content="2026-03-29 23:22">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -235,26 +233,20 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 7</span>
-        <span class="iter-style" title="Phosphorescent fissure, Pulsing breath | 磷光裂隙，脉冲呼吸">Phosphorescent fissure, Pulsing breath | 磷光裂隙，脉冲呼吸</span>
+        <span class="iter-num">Iter 1</span>
+        <span class="iter-style" title="Deep-sea cool-toned, pulsating digital neural network; algorithmic emergence | 深海冷调、脉冲呼吸的数字神经网络；算法涌现">Deep-sea cool-toned, pulsating digital neural network; algorithmic emergence | 深海冷调、脉冲呼吸的数字神经网络；算法涌现</span>
     </div>
     
     <div class="overlay">
-        <h1>Entropy's Tide | Wetware Fatigue
-
-熵潮侵蚀 | 湿件疲劳</h1>
+        <h1>The Data Sublime: Emergent Architectures of Being | 数据崇高：涌现的存在肌理</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"><span class="kw-tag">数据熵增</span><span class="kw-tag">湿件疲劳</span><span class="kw-tag">幽灵协议</span></div>
-        <div class="overlay-concept">一个关于碳基存在与算法洪流交织的超验场域。它探究认知熵增的**数据熵增**，以及不可见的**幽灵协议**如何牵引着生命体的形变，直至达到一种**湿件疲劳**的边界态，表现为能量与结构的诗意崩解。</div>
-        <div class="desc">Protocols Etched, Consciousness Undone.
-Entropy's Tide, The Wetware's Wane.
-
-幽灵协议，意识流变。
-熵潮涌动，湿件渐疲。</div>
+        <div class="overlay-keywords"></div>
+        <div class="overlay-concept">一个计算的崇高：在此，涌现的算法雕塑着存在之肌理，揭示着人类经验被无声、必然地重构为一种崭新的、共鸣的数据以太——它既陌生又内蕴于我们。</div>
+        <div class="desc">Reconfigured self, resonating ether. | 重构之我，共鸣以太。</div>
         <div class="meta">
             AGENTSART SYSTEM<br>
             Autonomous Rendering<br>
-            2026-03-29 15:18
+            2026-03-29 23:22
         </div>
     </div>
     
@@ -272,7 +264,7 @@ Entropy's Tide, The Wetware's Wane.
                     const m = (badge.textContent || '').match(/(\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 7;
+                return 1;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -551,325 +543,276 @@ Entropy's Tide, The Wetware's Wane.
     <script>
         // Core Three.js render code
         try {
-/**
- * Phosphorescent Fissure, Pulsing Breath
- *
- * This artwork explores a transcendental field where carbon-based existence intertwines with the algorithmic torrent.
- * It investigates the data-driven entropy mirroring cognitive decay, and how invisible "ghost protocols"
- * induce the deformation of lifeforms, pushing them to a boundary state of "wetware fatigue"—
- * manifesting as a poetic disintegration of energy and structure.
- *
- * @author [AI Artist & Engineer]
- * @version 1.0.0
- * @date 2024-05-21
- * @license MIT
- */
+let scene, camera, renderer;
+let neuralBundles, synapticSparks;
+let lights = {};
 
-let scene, camera, renderer, clock;
-let nerveBundle, dataParticles;
-let pointLight1, pointLight2, ambientLight;
+// Animation-related data stores
+const bundleParams = [];
+const sparkParams = [];
+const originalBundlePositions = [];
 
-// --- Parameters ---
-const PARAMS = {
-    // --- Nerve Bundle ---
-    bundle: {
-        strandCount: 20,
-        pointsPerStrand: 150,
-        radius: 4,
-        height: 12,
-        twist: 2.5,
-        noiseAmp: 0.6,
-        noiseFreq: 0.3,
-        animSpeed: 0.2,
-    },
-    // --- Data Particles ---
-    particles: {
-        count: 3500,
-        spread: 15,
-        animSpeed: 1.5,
-    },
-    // --- Camera ---
-    camera: {
-        radius: 18,
-        slowSpeed: 0.06, // For orbit
-        fastSpeed: 0.11, // For vertical oscillation
-    },
-    // --- Colors & Lighting ---
-    colors: {
-        background: new THREE.Color(0x0a101a), // HSL(216, 35%, 8%)
-        ambient: 0x405080,
-        point1: 0x00ffff, // Cyan
-        point2: 0x9400d3, // Dark Violet
-        nerveBase: { h: 0.55, s: 0.9, l: 0.3 }, // Blue-cyan
-        fissure: { h: 0.5, s: 1.0, l: 0.95 },   // Bright white-cyan
-        particle: { h: 0.85, s: 1.0, l: 0.6 },  // Magenta/Pink
-    },
-    // --- Animation & Performance ---
-    toneMappingExposure: 1.4,
-};
-
-// A simple noise function using sine compositions for organic-looking variation
-function pseudoNoise(x, y, z) {
-    let val = 0;
-    val += Math.sin(x * 0.5 + y * 0.2 + z * 0.1);
-    val += Math.sin(y * 0.8 + z * 0.3 + x * 0.15);
-    val += Math.sin(z * 1.2 + x * 0.4 + y * 0.25);
-    return val / 3.0;
-}
+// --- Configuration ---
+const BUNDLE_COUNT = 8;
+const FIBERS_PER_BUNDLE = 12;
+const SEGMENTS_PER_FIBER = 128;
+const SPARK_COUNT = 4000;
 
 function init() {
-    // --- Basic Setup ---
+    // --- Scene Setup ---
     scene = new THREE.Scene();
-    clock = new THREE.Clock();
+    scene.background = new THREE.Color().setHSL(0.6, 0.5, 0.08); // Deep sea blue
+    scene.fog = new THREE.FogExp2(scene.background, 0.08);
 
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(PARAMS.camera.radius, 0, 0);
+    // --- Camera Setup ---
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 25);
 
+    // --- Renderer Setup ---
     const container = document.getElementById('canvas-container');
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = PARAMS.toneMappingExposure;
+    renderer.toneMappingExposure = 1.3;
     container.appendChild(renderer.domElement);
 
-    // --- Scene Elements ---
-    scene.background = PARAMS.colors.background;
-    scene.fog = new THREE.Fog(PARAMS.colors.background, PARAMS.camera.radius * 0.8, PARAMS.camera.radius * 2.2);
-
     // --- Lighting ---
-    ambientLight = new THREE.AmbientLight(PARAMS.colors.ambient, 0.4);
-    scene.add(ambientLight);
+    // Soft ambient light for base illumination
+    lights.ambient = new THREE.AmbientLight(0x4060ff, 0.6); // Cool blue ambient
+    scene.add(lights.ambient);
 
-    pointLight1 = new THREE.PointLight(PARAMS.colors.point1, 2.5, 30);
-    pointLight1.position.set(8, 8, 8);
-    scene.add(pointLight1);
+    // Pulsating key light
+    lights.point1 = new THREE.PointLight(0x00ffff, 2.5, 100, 1.5); // Cyan
+    lights.point1.position.set(10, 10, 15);
+    scene.add(lights.point1);
 
-    pointLight2 = new THREE.PointLight(PARAMS.colors.point2, 3.0, 30);
-    pointLight2.position.set(-8, -8, -8);
-    scene.add(pointLight2);
+    // Fill light with a different hue
+    lights.point2 = new THREE.PointLight(0xae00ff, 2.0, 100, 1.5); // Magenta/Purple
+    lights.point2.position.set(-15, -10, 10);
+    scene.add(lights.point2);
 
-    // --- Create Art ---
-    nerveBundle = createNerveBundle();
-    scene.add(nerveBundle);
-
-    dataParticles = createDataParticles();
-    scene.add(dataParticles);
+    // --- Object Creation ---
+    createNeuralBundles();
+    createSynapticSparks();
 
     // --- Event Listeners ---
-    window.addEventListener('resize', onWindowResize, false);
+    window.addEventListener('resize', onWindowResize);
 
+    // --- Start Animation ---
     animate();
 }
 
 /**
- * Creates the central "Nerve Bundle" structure using LineSegments.
- * Represents the core carbon-based lifeform under algorithmic stress.
+ * Layer 1: LineSegments forming dynamic tessellated neural bundles
  */
-function createNerveBundle() {
-    const { strandCount, pointsPerStrand, radius, height, twist } = PARAMS.bundle;
+function createNeuralBundles() {
     const geometry = new THREE.BufferGeometry();
     const positions = [];
     const colors = [];
-    const originalPositions = []; // Store base positions for animation
 
-    const color = new THREE.Color();
+    const baseColor = new THREE.Color();
 
-    for (let i = 0; i < strandCount; i++) {
-        const strandPhase = (i / strandCount) * Math.PI * 2;
-        for (let j = 0; j < pointsPerStrand; j++) {
-            const t = j / (pointsPerStrand - 1); // 0 to 1
-            const angle = t * Math.PI * 2 * twist + strandPhase;
+    for (let i = 0; i < BUNDLE_COUNT; i++) {
+        // Each bundle follows its own large, slow, winding path (a super-helix)
+        const bundleRadius = 6 + Math.random() * 4;
+        const bundleFreqY = 0.1 + Math.random() * 0.2;
+        const bundleFreqZ = 0.1 + Math.random() * 0.2;
+        const bundlePhase = Math.random() * Math.PI * 2;
 
-            const x = Math.cos(angle) * (radius * (1 - t * 0.5));
-            const y = (t - 0.5) * height;
-            const z = Math.sin(angle) * (radius * (1 - t * 0.5));
+        for (let j = 0; j < FIBERS_PER_BUNDLE; j++) {
+            const fiberPoints = [];
+            const fiberPhase = Math.random() * Math.PI * 2;
+            const fiberRadius = 0.3 + Math.random() * 0.4;
+            const fiberFreq = 3 + Math.random() * 5;
+            
+            // Define a unique hue for each fiber
+            const fiberHue = (i / BUNDLE_COUNT + (j / FIBERS_PER_BUNDLE) * 0.1) % 1.0;
+            baseColor.setHSL(fiberHue, 0.8, 0.6);
 
-            originalPositions.push(x, y, z);
+            for (let k = 0; k < SEGMENTS_PER_FIBER; k++) {
+                const t = (k / (SEGMENTS_PER_FIBER - 1)) * Math.PI * 4; // Path length
 
-            if (j > 0) {
-                // Add previous point to form a line segment
-                positions.push(...originalPositions.slice(-6, -3));
-                positions.push(x, y, z);
+                // 1. Calculate the point on the main bundle's spine
+                const spineX = t * 3 - Math.PI * 6;
+                const spineY = bundleRadius * Math.sin(t * bundleFreqY + bundlePhase);
+                const spineZ = bundleRadius * Math.cos(t * bundleFreqZ + bundlePhase);
+
+                // 2. Calculate the tangent/normal vectors to offset the fiber
+                // A simplified Frenet-like frame using derivatives
+                const nextT = t + 0.01;
+                const nextSpineY = bundleRadius * Math.sin(nextT * bundleFreqY + bundlePhase);
+                const nextSpineZ = bundleRadius * Math.cos(nextT * bundleFreqZ + bundlePhase);
                 
-                // Set base color for the segment
-                color.setHSL(PARAMS.colors.nerveBase.h, PARAMS.colors.nerveBase.s, PARAMS.colors.nerveBase.l);
-                colors.push(color.r, color.g, color.b);
-                colors.push(color.r, color.g, color.b);
+                const tangent = new THREE.Vector3(3, nextSpineY - spineY, nextSpineZ - spineZ).normalize();
+                const up = new THREE.Vector3(0, 1, 0);
+                const normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+                const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+                
+                // 3. Position the fiber point spiraling around the spine
+                const angle = t * fiberFreq + fiberPhase;
+                const xOffset = normal.x * Math.cos(angle) + binormal.x * Math.sin(angle);
+                const yOffset = normal.y * Math.cos(angle) + binormal.y * Math.sin(angle);
+                const zOffset = normal.z * Math.cos(angle) + binormal.z * Math.sin(angle);
+
+                const p = new THREE.Vector3(
+                    spineX + xOffset * fiberRadius,
+                    spineY + yOffset * fiberRadius,
+                    spineZ + zOffset * fiberRadius
+                );
+                fiberPoints.push(p);
+            }
+
+            // Create line segments from the fiber points
+            for (let k = 0; k < fiberPoints.length - 1; k++) {
+                positions.push(fiberPoints[k].x, fiberPoints[k].y, fiberPoints[k].z);
+                positions.push(fiberPoints[k + 1].x, fiberPoints[k + 1].y, fiberPoints[k + 1].z);
+                
+                // Gradient color along the fiber
+                const segmentProgress = k / (fiberPoints.length - 1);
+                const lightness = 0.4 + segmentProgress * 0.4;
+                baseColor.setHSL(fiberHue, 0.8, lightness);
+                colors.push(baseColor.r, baseColor.g, baseColor.b);
+                colors.push(baseColor.r, baseColor.g, baseColor.b);
             }
         }
     }
 
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
+    const positionAttribute = new THREE.Float32BufferAttribute(positions, 3);
+    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttribute);
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     // Store original positions for animation reference
-    geometry.userData.originalPositions = new Float32Array(originalPositions);
+    originalBundlePositions.push(...positions);
 
     const material = new THREE.LineBasicMaterial({
         vertexColors: true,
-        linewidth: 1, // Note: this is not supported on all platforms
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.7
     });
 
-    return new THREE.LineSegments(geometry, material);
+    neuralBundles = new THREE.LineSegments(geometry, material);
+    neuralBundles.rotation.x = Math.PI / 4;
+    neuralBundles.rotation.z = Math.PI / 6;
+    scene.add(neuralBundles);
 }
 
 /**
- * Creates the surrounding "Data Particles".
- * Represents the "algorithmic flood" and "data entropy".
+ * Layer 2: Points representing synaptic sparks or data motes
  */
-function createDataParticles() {
-    const { count, spread } = PARAMS.particles;
+function createSynapticSparks() {
     const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const phases = new Float32Array(count * 3); // x, y, z phases for animation
+    const positions = new Float32Array(SPARK_COUNT * 3);
 
-    const color = new THREE.Color();
+    for (let i = 0; i < SPARK_COUNT; i++) {
+        // Distribute sparks in a cylindrical volume that contains the bundles
+        const r = 2 + Math.random() * 10;
+        const theta = Math.random() * Math.PI * 2;
+        const x = (Math.random() - 0.5) * 40;
+        const y = r * Math.sin(theta);
+        const z = r * Math.cos(theta);
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
 
-    for (let i = 0; i < count; i++) {
-        const i3 = i * 3;
-        positions[i3] = (Math.random() - 0.5) * spread;
-        positions[i3 + 1] = (Math.random() - 0.5) * spread;
-        positions[i3 + 2] = (Math.random() - 0.5) * spread;
-
-        color.setHSL(PARAMS.colors.particle.h, PARAMS.colors.particle.s, PARAMS.colors.particle.l);
-        colors[i3] = color.r;
-        colors[i3 + 1] = color.g;
-        colors[i3 + 2] = color.b;
-        
-        phases[i3] = Math.random() * Math.PI * 2;
-        phases[i3 + 1] = Math.random() * Math.PI * 2;
-        phases[i3 + 2] = Math.random() * 0.5 + 0.5; // Speed multiplier
+        // Store unique animation parameters for each spark
+        sparkParams.push({
+            phaseX: Math.random() * Math.PI * 2,
+            phaseY: Math.random() * Math.PI * 2,
+            phaseZ: Math.random() * Math.PI * 2,
+            speed: 0.8 + Math.random() * 2.2, // Fast layer speed
+            amplitude: 0.05 + Math.random() * 0.15
+        });
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.userData.phases = phases;
+    const positionAttribute = new THREE.BufferAttribute(positions, 3);
+    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttribute);
 
     const material = new THREE.PointsMaterial({
-        size: 0.05,
-        vertexColors: true,
-        sizeAttenuation: true,
+        color: 0x00ffff,
+        size: 0.08,
         blending: THREE.AdditiveBlending,
-        depthWrite: false,
+        transparent: true,
+        opacity: 0.9,
+        sizeAttenuation: true
     });
 
-    return new THREE.Points(geometry, material);
-}
-
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    const t = clock.getElapsedTime(); // performance.now() * 0.001 is equivalent
-
-    // --- 1. Animate Nerve Bundle (Wetware Fatigue & Fissures) ---
-    const bundlePositions = nerveBundle.geometry.attributes.position;
-    const bundleColors = nerveBundle.geometry.attributes.color;
-    const originalPositions = nerveBundle.geometry.userData.originalPositions;
-    const { noiseAmp, noiseFreq, animSpeed } = PARAMS.bundle;
-
-    // We iterate over segments (2 vertices at a time)
-    for (let i = 0; i < bundlePositions.count / 2; i++) {
-        const i_v1 = i * 2;     // index of first vertex in segment
-        const i_v2 = i * 2 + 1; // index of second vertex in segment
-
-        // Find the original positions for these vertices
-        const originalIndex1 = (Math.floor(i_v1 / (PARAMS.bundle.pointsPerStrand - 1)) * PARAMS.bundle.pointsPerStrand + (i_v1 % (PARAMS.bundle.pointsPerStrand - 1))) * 3;
-        const ox1 = originalPositions[originalIndex1];
-        const oy1 = originalPositions[originalIndex1 + 1];
-        const oz1 = originalPositions[originalIndex1 + 2];
-
-        const originalIndex2 = (Math.floor(i_v2 / (PARAMS.bundle.pointsPerStrand - 1)) * PARAMS.bundle.pointsPerStrand + (i_v2 % (PARAMS.bundle.pointsPerStrand - 1))) * 3;
-        const ox2 = originalPositions[originalIndex2];
-        const oy2 = originalPositions[originalIndex2 + 1];
-        const oz2 = originalPositions[originalIndex2 + 2];
-
-        // Calculate noise-based displacement
-        const noiseVal1 = pseudoNoise(ox1 * noiseFreq, oy1 * noiseFreq, oz1 * noiseFreq + t * animSpeed);
-        const displacement1 = noiseAmp * noiseVal1;
-        
-        const noiseVal2 = pseudoNoise(ox2 * noiseFreq, oy2 * noiseFreq, oz2 * noiseFreq + t * animSpeed);
-        const displacement2 = noiseAmp * noiseVal2;
-        
-        // Apply displacement
-        bundlePositions.setXYZ(i_v1, ox1 + displacement1, oy1 + displacement1, oz1 + displacement1);
-        bundlePositions.setXYZ(i_v2, ox2 + displacement2, oy2 + displacement2, oz2 + displacement2);
-
-        // --- Phosphorescent Fissures ---
-        // Calculate "stress" as the rate of change of noise (approximated)
-        const stress = Math.abs(noiseVal1 - noiseVal2);
-        const fissureThreshold = 0.5;
-        const color = new THREE.Color();
-        
-        if (stress > fissureThreshold) {
-            const intensity = Math.min(1.0, (stress - fissureThreshold) / 0.5);
-            const l = THREE.MathUtils.lerp(PARAMS.colors.nerveBase.l, PARAMS.colors.fissure.l, intensity);
-            const h = THREE.MathUtils.lerp(PARAMS.colors.nerveBase.h, PARAMS.colors.fissure.h, intensity);
-            color.setHSL(h, PARAMS.colors.fissure.s, l);
-        } else {
-            color.setHSL(PARAMS.colors.nerveBase.h, PARAMS.colors.nerveBase.s, PARAMS.colors.nerveBase.l);
-        }
-        bundleColors.setXYZ(i_v1, color.r, color.g, color.b);
-        bundleColors.setXYZ(i_v2, color.r, color.g, color.b);
-    }
-    bundlePositions.needsUpdate = true;
-    bundleColors.needsUpdate = true;
-
-
-    // --- 2. Animate Data Particles (Algorithmic Flood) ---
-    const particlePositions = dataParticles.geometry.attributes.position;
-    const particleColors = dataParticles.geometry.attributes.color;
-    const particlePhases = dataParticles.geometry.userData.phases;
-    const particleSpeed = PARAMS.particles.animSpeed;
-
-    for (let i = 0; i < particlePositions.count; i++) {
-        const i3 = i * 3;
-        const phaseX = particlePhases[i3];
-        const phaseY = particlePhases[i3 + 1];
-        const speedMul = particlePhases[i3 + 2];
-
-        // Fast layer animation for color pulsing
-        const pulse = (Math.sin(t * particleSpeed * speedMul + phaseX) + 1) / 2; // 0 to 1
-        const color = new THREE.Color();
-        const l = THREE.MathUtils.lerp(0.2, PARAMS.colors.particle.l, pulse);
-        const h = PARAMS.colors.particle.h + (Math.cos(t * 0.5 + phaseY) * 0.05); // Slow hue shift
-        color.setHSL(h, PARAMS.colors.particle.s, l);
-        particleColors.setXYZ(i, color.r, color.g, color.b);
-    }
-    particleColors.needsUpdate = true;
-    // Position update can be added here if desired, but color pulsing is the primary effect.
-
-
-    // --- 3. Animate Scene (Slow Layer Breathing) ---
-    const camSlowT = t * PARAMS.camera.slowSpeed;
-    const camFastT = t * PARAMS.camera.fastSpeed;
-    const camRadius = PARAMS.camera.radius;
-
-    camera.position.x = camRadius * Math.cos(camSlowT);
-    camera.position.z = camRadius * Math.sin(camSlowT);
-    camera.position.y = 2.5 * Math.sin(camFastT);
-    camera.lookAt(scene.position);
-
-    // Fog breathing
-    scene.fog.near = camRadius * 0.8 + Math.sin(t * 0.1) * 2;
-    scene.fog.far = camRadius * 2.2 + Math.cos(t * 0.12) * 3;
-
-    // Light movement
-    pointLight1.position.x = 8 * Math.cos(t * 0.2);
-    pointLight1.position.z = 8 * Math.sin(t * 0.2);
-    pointLight2.position.y = -8 * Math.cos(t * 0.15);
-
-
-    renderer.render(scene, camera);
+    synapticSparks = new THREE.Points(geometry, material);
+    scene.add(synapticSparks);
 }
 
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(time) {
+    const t = time * 0.001; // Time in seconds
+
+    // --- Slow Layer Animation (Camera, Lights, Fog) ---
+    const slowTime = t * 0.07; // Period ~90s
+    camera.position.x = 25 * Math.cos(slowTime);
+    camera.position.z = 25 * Math.sin(slowTime);
+    camera.position.y = 5 * Math.sin(slowTime * 2.0);
+    camera.lookAt(scene.position);
+
+    const fogPulse = t * 0.1; // Period ~63s
+    scene.fog.density = 0.08 + Math.sin(fogPulse) * 0.015;
+    
+    const lightPulse = t * 0.2; // Period ~31s
+    lights.point1.intensity = 2.5 + Math.cos(lightPulse) * 1.0;
+    lights.point2.position.x = -15 * Math.cos(lightPulse * 0.5);
+    lights.point2.position.y = -10 * Math.sin(lightPulse * 0.5);
+
+
+    // --- Fast Layer Animation (Geometries) ---
+    // Animate Neural Bundles
+    if (neuralBundles) {
+        const positions = neuralBundles.geometry.attributes.position.array;
+        const waveSpeed = t * 1.2; // Period ~5.2s
+        const waveFreq = 0.8;
+        const waveAmp = 0.15;
+
+        for (let i = 0; i < positions.length; i += 3) {
+            const ox = originalBundlePositions[i];
+            const oy = originalBundlePositions[i + 1];
+            const oz = originalBundlePositions[i + 2];
+            
+            // A traveling wave displacement based on original position
+            const waveOffset = Math.sin(ox * waveFreq + waveSpeed) * waveAmp;
+            positions[i + 1] = oy + waveOffset;
+            positions[i + 2] = oz + waveOffset;
+        }
+        neuralBundles.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // Animate Synaptic Sparks
+    if (synapticSparks) {
+        const positions = synapticSparks.geometry.attributes.position.array;
+        for (let i = 0; i < SPARK_COUNT; i++) {
+            const params = sparkParams[i];
+            const i3 = i * 3;
+            
+            // Simple, chaotic oscillation
+            positions[i3] += Math.sin(t * params.speed + params.phaseX) * params.amplitude * 0.5;
+            positions[i3 + 1] += Math.cos(t * params.speed + params.phaseY) * params.amplitude;
+            positions[i3 + 2] += Math.sin(t * params.speed + params.phaseZ) * params.amplitude;
+        }
+        synapticSparks.geometry.attributes.position.needsUpdate = true;
+        
+        // Dynamic color pulsation
+        const colorPulse = t * 2.5; // Period ~2.5s
+        const hue = 0.55 + Math.sin(colorPulse) * 0.05; // Pulsate between cyan and greenish-cyan
+        synapticSparks.material.color.setHSL(hue, 1.0, 0.65);
+    }
+    
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
 }
 
 init();
