@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>幻棱 — 布局编辑器（Three.js 3D）</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: #0e1412;
+  color: #e8f4f0;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 8px 10px 10px;
+}
+.page-header { flex-shrink: 0; margin-bottom: 8px; }
+h1 { color: #5eead4; font-size: clamp(13px, 1.5vw, 16px); letter-spacing: 2px; }
+.sub { color: #a78bfa; font-size: clamp(9px, 1.05vw, 11px); margin: 4px 0 0; letter-spacing: 0.5px; line-height: 1.45; }
+
+.main-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: stretch;
+}
+#canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a100e;
+}
+#canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+.hud {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: min(420px, 92%);
+  font-size: clamp(9px, 1vw, 11px);
+  line-height: 1.5;
+  color: rgba(200, 230, 220, 0.78);
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+.hud kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(94, 234, 212, 0.45);
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.92em;
+}
+
+.quad-console {
+  flex: 0 0 clamp(168px, 26vw, 300px);
+  width: clamp(168px, 26vw, 300px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(165deg, rgba(22, 32, 30, 0.98) 0%, rgba(14, 22, 20, 0.98) 100%);
+  border: 1px solid rgba(94, 234, 212, 0.22);
+  border-radius: 8px;
+  padding: 8px 9px 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.console-head { flex-shrink: 0; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid rgba(94, 234, 212, 0.18); }
+.console-title { display: block; font-size: 11px; letter-spacing: 2px; color: #5eead4; font-weight: 600; }
+.console-sub { display: block; margin-top: 3px; font-size: 9px; color: rgba(167, 139, 250, 0.85); letter-spacing: 0.5px; }
+.console-section { margin-bottom: 10px; }
+.console-sec-label {
+  font-size: 9px; letter-spacing: 1.5px; color: rgba(94, 234, 212, 0.65);
+  text-transform: uppercase; margin-bottom: 5px; padding-left: 2px;
+}
+.console-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.4em minmax(56px, 1fr);
+  gap: 5px 6px;
+  align-items: center;
+  width: 100%;
+}
+.console-grid > span.cfg-lbl { font-size: 10px; color: rgba(200, 230, 220, 0.82); min-width: 0; }
+.console-grid .ang-val-b { text-align: right; font-size: 10px; color: #5eead4; font-weight: 600; }
+.console-grid input[type=range] { width: 100%; min-width: 0; margin: 0; }
+.console-grid .cfg-hint {
+  grid-column: 1 / -1;
+  font-size: 8px;
+  color: rgba(160, 200, 190, 0.45);
+  margin: -1px 0 2px 0;
+  padding-left: 2px;
+}
+.layout-io-btns { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 4px; }
+.layout-io-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: #0e1412;
+  background: #5eead4;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.layout-io-btn:hover { filter: brightness(1.08); }
+.layout-io-msg { margin-top: 6px; font-size: 9px; line-height: 1.4; color: rgba(200, 230, 220, 0.62); word-break: break-word; }
+.layout-io-msg.err { color: #fbbf24; }
+
+#panel-mini {
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  background: rgba(20, 18, 28, 0.6);
+  font-size: 9px;
+  line-height: 1.55;
+  color: rgba(220, 210, 240, 0.85);
+}
+#panel-mini h2 { color: #c4b5fd; font-size: 10px; letter-spacing: 2px; margin-bottom: 6px; }
+#plist .pitem { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 10px; }
+.pdot { width: 8px; height: 8px; border-radius: 2px; border: 1.5px solid; flex-shrink: 0; }
+#status {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(167, 139, 250, 0.25);
+  font-size: 10px;
+  color: rgba(200, 230, 220, 0.88);
+  line-height: 1.65;
+  min-height: 52px;
+}
+#status b { color: #5eead4; }
+#status .sv { color: rgba(167, 239, 220, 0.9); }
+
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(94, 234, 212, 0.22);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #5eead4;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>幻棱 PHANTAPRISM — 布局编辑器（Three.js 3D）</h1>
+  <p class="sub"><strong>本页 <code>layout_3d.html</code></strong>：导出/导入 JSON（<code>format: phantaprism-layout-editor</code>）备份布展。L/R <strong>墙装</strong>：<strong>墙板 + 短竖槽 + 单节主臂</strong>；<strong>VESA 盘在屏背</strong>。Sensor 贴墙无臂。三屏默认视心<strong>略作高低错落</strong>（展陈构图，非标线齐平）。后墙<strong>米刻度</strong> + <strong>L/C/R 竖带</strong>；地面脚印示意。拖拽：水平面 cx/cz；Shift+竖直面 cx/cy。</p>
+</div>
+
+<div class="main-row">
+  <div id="canvas-wrap">
+    <div class="hud">
+      轨道：左键旋转 · 右键平移 · 滚轮缩放<br>
+      后墙右侧：米刻度；三色竖带 = L/C/R 屏高（底→顶）<br>
+      悬臂：墙板 + 竖槽 + 单臂；VESA 盘在屏背（类市售电视墙架）<br>
+      选中拖拽：<b>水平面</b> cx/cz | <kbd>Shift</kbd>：<b>竖直面</b> cx/cy
+    </div>
+  </div>
+  <div class="quad-console">
+    <div class="console-head">
+      <span class="console-title">控制台</span>
+    </div>
+    <div class="console-section">
+      <div class="console-sec-label">连体</div>
+      <div class="console-grid">
+        <span class="cfg-lbl">转角</span><b id="rig-yaw-val" class="ang-val-b">0°</b><input type="range" id="rig-yaw" min="-18" max="18" value="0" step="1">
+        <span class="cfg-hint">三屏同加</span>
+        <span class="cfg-lbl">进退</span><b id="rig-reach-val" class="ang-val-b">0cm</b><input type="range" id="rig-reach" min="-22" max="32" value="0" step="1">
+        <span class="cfg-hint">三屏同 Δ cz</span>
+      </div>
+    </div>
+    <div class="console-section">
+      <div class="console-sec-label">倾角</div>
+      <div class="console-grid">
+        <span class="cfg-lbl">左 L</span><b id="ang-val-L" class="ang-val-b">-28°</b><input type="range" id="ang-slider-L" min="-72" max="-12" value="-28" step="1">
+        <span class="cfg-lbl">右 R</span><b id="ang-val-R" class="ang-val-b">46°</b><input type="range" id="ang-slider-R" min="18" max="70" value="46" step="1">
+        <span class="cfg-lbl">中 C</span><b id="ang-val-C" class="ang-val-b">2°</b><input type="range" id="ang-slider-C" min="-10" max="14" value="2" step="1">
+      </div>
+    </div>
+    <div class="console-section">
+      <div class="console-sec-label">臂锚 · L/R（Sensor 贴墙无臂）</div>
+      <div class="console-grid">
+        <span class="cfg-lbl">L 高</span><b id="anchor-val-L" class="ang-val-b">2.44m</b><input type="range" id="anchor-slider-L" min="140" max="260" value="244" step="2">
+        <span class="cfg-hint">中屏无顶锚</span>
+        <span class="cfg-lbl">R 高</span><b id="anchor-val-R" class="ang-val-b">2.24m</b><input type="range" id="anchor-slider-R" min="140" max="260" value="224" step="2">
+      </div>
+      <input type="hidden" id="anchor-slider-C" value="8" />
+      <span id="anchor-val-C" style="display:none">+8cm</span>
+    </div>
+    <div class="console-section">
+      <div class="console-sec-label">布局存档</div>
+      <div class="layout-io-btns">
+        <button type="button" class="layout-io-btn" id="btn-export-layout">导出 JSON</button>
+        <button type="button" class="layout-io-btn" id="btn-import-layout">导入…</button>
+      </div>
+      <input type="file" id="import-layout-file" accept="application/json,.json,text/json" style="display:none" tabindex="-1" />
+      <div class="layout-io-msg" id="layout-io-msg"></div>
+    </div>
+    <div id="panel-mini">
+      <h2>// 元素</h2>
+      <div id="plist"></div>
+      <div id="status">点击 3D 物体选中；悬停看坐标</div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── 房间与物品（米制，与导出 JSON 字段一致）────────────────────────
+const WW = 5.35;
+/** 净高（m）：2.62 偏压抑且不利竖屏上沿留白；3.1 接近常见小展间/办公净高观感 */
+const WH = 3.1;
+const WD = 3.45;
+
+const ARM_ANCHOR_DATA = {
+  L: { ax_off: 0.10, anchorH: 2.44 },
+  C: { ax_off: -0.05, anchorH_off: 0.08 },
+  R: { ax_off: -0.08, anchorH: 2.24 },
+};
+
+const SCR_M_PER_IN = 0.0254 / Math.sqrt(16 * 16 + 9 * 9);
+const DASH_H_BOOST = 1.045;
+const SCR43_P = {
+  w: 43 * SCR_M_PER_IN * 9,
+  h: 43 * SCR_M_PER_IN * 16 * DASH_H_BOOST,
+  d: 0.07,
+};
+const SCR32_L = { w: 32 * SCR_M_PER_IN * 16, h: 32 * SCR_M_PER_IN * 9, d: 0.06 };
+const SCR27_L = { w: 27 * SCR_M_PER_IN * 16, h: 27 * SCR_M_PER_IN * 9, d: 0.05 };
+
+/**
+ * 默认「视心」离地高度（屏几何中心，m）——刻意错落，避免医用标线式完全齐平：
+ * L 略低（俯看终端/控制台感）；C 锚在常见平视带（叙事焦点）；R 略抬（主展面轻上扬，像折射收束）。
+ */
+const DEFAULT_SCREEN_CENTER_Y = { L: 1.48, C: 1.575, R: 1.645 };
+function defaultScreenCyFromCenter(h, centerY) {
+  return Math.max(0.05, Math.min(WH - h - 0.06, centerY - h * 0.5));
+}
+
+const ITEMS = [
+  { id: 'L', label: 'Dashboard\n(43″竖·加高)', emoji: '📊', type: 'screen',
+    w: SCR43_P.w, h: SCR43_P.h, d: SCR43_P.d, cx: 1.05, cy: defaultScreenCyFromCenter(SCR43_P.h, DEFAULT_SCREEN_CENTER_Y.L), cz: 0.38, ang: -28, color: '#66c8ff' },
+  { id: 'C', label: 'Sensor\n(27″横·贴墙)', emoji: '👁', type: 'screen',
+    w: SCR27_L.w, h: SCR27_L.h, d: SCR27_L.d, cx: 2.28, cy: defaultScreenCyFromCenter(SCR27_L.h, DEFAULT_SCREEN_CENTER_Y.C), cz: 0.028, ang: 2, color: '#30d890' },
+  { id: 'R', label: 'Evolution\n(32″横·终展)', emoji: '🖥', type: 'screen',
+    w: SCR32_L.w, h: SCR32_L.h, d: SCR32_L.d, cx: 3.62, cy: defaultScreenCyFromCenter(SCR32_L.h, DEFAULT_SCREEN_CENTER_Y.R), cz: 0.32, ang: 46, color: '#00e5cc' },
+  { id: 'CAM', label: '摄像头', emoji: '📷', type: 'device',
+    w: 0.105, h: 0.028, d: 0.038, cx: 2.28, cy: 1.52, cz: 0.05, ang: 2, color: '#f0c020' },
+  { id: 'MAC', label: 'Mac mini M4\n(16G)', emoji: '🖥', type: 'device',
+    w: 0.127, h: 0.051, d: 0.127, cx: 0.26, cy: 0.10, cz: 1.42, ang: 14, color: '#a8a8c0' },
+  { id: 'TBL', label: '装置台座\n(操作台)', emoji: '⬡', type: 'table',
+    w: 0.55, h: 0.82, d: 0.72, cx: 0.28, cy: 0.0, cz: 1.42, ang: 14, color: '#c840d8' },
+  { id: 'PRT', label: '打印机\n(输出口)', emoji: '🖨', type: 'device',
+    w: 0.42, h: 0.19, d: 0.31, cx: 0.28, cy: 0.82, cz: 1.50, ang: 14, color: '#f07030' },
+];
+
+function syncCamToSensor() {
+  const c = ITEMS.find((i) => i.id === 'C');
+  const cam = ITEMS.find((i) => i.id === 'CAM');
+  if (!c || !cam) return;
+  cam.cx = c.cx;
+  cam.cz = Math.max(0.02, c.cz + c.d * 0.15);
+  cam.cy = c.cy + c.h + 0.014;
+  cam.ang = c.ang;
+}
+
+const CLUSTER_CZ0 = {};
+['L', 'C', 'R'].forEach((id) => {
+  CLUSTER_CZ0[id] = ITEMS.find((i) => i.id === id).cz;
+});
+
+function getArmConfig() {
+  const sl = ITEMS.find((i) => i.id === 'L');
+  const sc = ITEMS.find((i) => i.id === 'C');
+  const sr = ITEMS.find((i) => i.id === 'R');
+  return {
+    sl, sc, sr,
+    L: { ax: sl.cx + ARM_ANCHOR_DATA.L.ax_off, acz: 0.05, anchorH: ARM_ANCHOR_DATA.L.anchorH },
+    C: { ax: sc.cx + ARM_ANCHOR_DATA.C.ax_off, acz: 0.04,
+      anchorH: sc.cy + sc.h + ARM_ANCHOR_DATA.C.anchorH_off },
+    R: { ax: sr.cx + ARM_ANCHOR_DATA.R.ax_off, acz: 0.05, anchorH: ARM_ANCHOR_DATA.R.anchorH },
+  };
+}
+
+function applyRigSlidersToAngles() {
+  const yaw = parseInt(document.getElementById('rig-yaw').value, 10);
+  const trimL = parseInt(document.getElementById('ang-slider-L').value, 10);
+  const trimR = parseInt(document.getElementById('ang-slider-R').value, 10);
+  const trimC = parseInt(document.getElementById('ang-slider-C').value, 10);
+  ITEMS.find((i) => i.id === 'L').ang = trimL + yaw;
+  ITEMS.find((i) => i.id === 'R').ang = trimR + yaw;
+  ITEMS.find((i) => i.id === 'C').ang = trimC + yaw;
+}
+
+function applyClusterReach() {
+  const cm = parseInt(document.getElementById('rig-reach').value, 10);
+  document.getElementById('rig-reach-val').textContent = (cm >= 0 ? '+' : '') + cm + 'cm';
+  const dr = cm / 100;
+  ['L', 'C', 'R'].forEach((id) => {
+    const it = ITEMS.find((i) => i.id === id);
+    it.cz = Math.max(0.02, Math.min(WD - it.d / 2, CLUSTER_CZ0[id] + dr));
+  });
+}
+
+// ── Three.js：坐标系 X 宽、Y 高、Z 深（后墙 z=0，入口 z≈WD）────────
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a100e);
+scene.fog = new THREE.Fog(0x0a100e, 4, 14);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 80);
+camera.position.set(WW * 0.55, WH * 1.15, WD * 1.35);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(WW * 0.45, WH * 0.35, WD * 0.45);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.maxPolarAngle = Math.PI * 0.499;
+
+const hemi = new THREE.HemisphereLight(0x7a9aa8, 0x1a2220, 0.85);
+scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xe8f4ff, 0.55);
+dir.position.set(WW * 0.3, WH * 1.8, WD * 0.5);
+dir.castShadow = true;
+dir.shadow.mapSize.set(1024, 1024);
+dir.shadow.camera.near = 0.5;
+dir.shadow.camera.far = 20;
+dir.shadow.camera.left = -4;
+dir.shadow.camera.right = 10;
+dir.shadow.camera.top = 6;
+dir.shadow.camera.bottom = -1;
+scene.add(dir);
+
+const roomGroup = new THREE.Group();
+scene.add(roomGroup);
+
+function makeRoomShell() {
+  while (roomGroup.children.length) {
+    const o = roomGroup.children.pop();
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+      else o.material.dispose();
+    }
+  }
+
+  const floorGeo = new THREE.PlaneGeometry(WW, WD);
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x152822,
+    roughness: 0.88,
+    metalness: 0.05,
+  });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(WW / 2, 0, WD / 2);
+  floor.receiveShadow = true;
+  roomGroup.add(floor);
+
+  const grid = new THREE.GridHelper(Math.max(WW, WD), 14, 0x2a5048, 0x1a3028);
+  grid.position.set(WW / 2, 0.002, WD / 2);
+  grid.rotation.y = Math.PI / 2;
+  roomGroup.add(grid);
+
+  const backWallGeo = new THREE.PlaneGeometry(WW, WH);
+  const backMat = new THREE.MeshStandardMaterial({
+    color: 0x1a2824,
+    roughness: 0.92,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.88,
+  });
+  const backWall = new THREE.Mesh(backWallGeo, backMat);
+  backWall.position.set(WW / 2, WH / 2, 0.001);
+  backWall.receiveShadow = true;
+  roomGroup.add(backWall);
+
+  const leftWallGeo = new THREE.PlaneGeometry(WD, WH);
+  const sideMat = new THREE.MeshStandardMaterial({
+    color: 0x141e1c,
+    roughness: 0.95,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.55,
+  });
+  const leftWall = new THREE.Mesh(leftWallGeo, sideMat);
+  leftWall.rotation.y = Math.PI / 2;
+  leftWall.position.set(0.001, WH / 2, WD / 2);
+  roomGroup.add(leftWall);
+
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(WW, WH, WD)),
+    new THREE.LineBasicMaterial({ color: 0x3d7a6c, transparent: true, opacity: 0.45 })
+  );
+  edges.position.set(WW / 2, WH / 2, WD / 2);
+  roomGroup.add(edges);
+}
+
+makeRoomShell();
+
+const itemMeshes = new Map();
+const itemGroup = new THREE.Group();
+scene.add(itemGroup);
+
+const armGroup = new THREE.Group();
+scene.add(armGroup);
+const audienceGroup = new THREE.Group();
+scene.add(audienceGroup);
+const wallMarksGroup = new THREE.Group();
+scene.add(wallMarksGroup);
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let selectedId = null;
+
+function itemToWorld(item) {
+  const cx = item.cx;
+  const cyb = item.cy;
+  const cz = item.cz;
+  const yc = cyb + item.h / 2;
+  return { cx, yc, cz, cyb };
+}
+
+function syncItemMesh(item) {
+  applyRigSlidersToAngles();
+  let group = itemMeshes.get(item.id);
+  if (!group) {
+    group = new THREE.Group();
+    group.userData.itemId = item.id;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(item.color),
+      roughness: item.type === 'screen' ? 0.35 : 0.75,
+      metalness: item.type === 'screen' ? 0.15 : 0.05,
+      emissive: new THREE.Color(item.color),
+      emissiveIntensity: item.type === 'screen' ? 0.12 : 0.04,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData.itemId = item.id;
+    group.add(mesh);
+    itemMeshes.set(item.id, group);
+    itemGroup.add(group);
+  }
+  const mesh = group.children[0];
+  mesh.scale.set(item.w, item.h, item.d);
+  const { cx, yc, cz } = itemToWorld(item);
+  group.position.set(cx, yc, cz);
+  group.rotation.y = THREE.MathUtils.degToRad(-item.ang);
+  const mat = mesh.material;
+  const em = selectedId === item.id ? 0.22 : item.type === 'screen' ? 0.12 : 0.04;
+  mat.emissiveIntensity = em;
+}
+
+/** 圆柱默认轴向 +Y，从 A 连到 B（类铝杆/臂身） */
+function meshCylinderBetween(A, B, radius, material) {
+  const dir = new THREE.Vector3().subVectors(B, A);
+  const len = dir.length();
+  if (len < 1e-4) return null;
+  const geom = new THREE.CylinderGeometry(radius, radius, len, 16);
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.position.copy(A).add(B).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/** 屏几何中心（盒心） */
+function screenCenterWorld(s) {
+  return new THREE.Vector3(s.cx, s.cy + s.h * 0.5, s.cz);
+}
+
+/**
+ * 屏「贴墙一侧」背面中点（世界坐标）：盒深沿本地 −Z，再随屏绕 Y 旋转。
+ * 臂与 VESA 盘接到此点，避免圆盘凸到画面一侧。
+ */
+function screenBackWorldCenter(s) {
+  const c = screenCenterWorld(s);
+  const halfBack = new THREE.Vector3(0, 0, -s.d * 0.5);
+  halfBack.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(-s.ang), 0));
+  return c.add(halfBack);
+}
+
+/**
+ * L/R 墙装悬臂：墙板 + 墙上短竖槽（高度可调语义）+ 单节主臂；VESA 薄盘埋在屏背内侧。
+ */
+function buildArms() {
+  while (armGroup.children.length) {
+    const o = armGroup.children.pop();
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+      else o.material.dispose();
+    }
+  }
+
+  const cfg = getArmConfig();
+  const arms = [
+    { s: cfg.sl, a: cfg.L, color: 0x66c8ff },
+    { s: cfg.sr, a: cfg.R, color: 0x00e5cc },
+  ];
+
+  const plateMat = new THREE.MeshStandardMaterial({
+    color: 0xd4d8e4,
+    roughness: 0.42,
+    metalness: 0.28,
+  });
+  const railMat = new THREE.MeshStandardMaterial({
+    color: 0xa8b0c4,
+    roughness: 0.48,
+    metalness: 0.4,
+  });
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0xeef1f8,
+    roughness: 0.32,
+    metalness: 0.55,
+  });
+
+  const wallZFace = 0.012;
+
+  arms.forEach((entry) => {
+    const s = entry.s;
+    const a = entry.a;
+    const anchorY = THREE.MathUtils.clamp(a.anchorH, 0.48, WH - 0.12);
+    const pCenter = screenCenterWorld(s);
+    const pBack = screenBackWorldCenter(s);
+
+    const pPlate = new THREE.Vector3(a.ax, anchorY, wallZFace + 0.011);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.022), plateMat);
+    plate.position.copy(pPlate);
+    plate.castShadow = true;
+    armGroup.add(plate);
+
+    const slotTop = anchorY + 0.07;
+    const slotBot = anchorY - 0.08;
+    const slotZ = wallZFace + 0.02;
+    const slot = meshCylinderBetween(
+      new THREE.Vector3(a.ax, slotTop, slotZ),
+      new THREE.Vector3(a.ax, slotBot, slotZ),
+      0.014,
+      railMat
+    );
+    if (slot) armGroup.add(slot);
+
+    const pBase = new THREE.Vector3(a.ax, anchorY - 0.02, wallZFace + 0.056);
+
+    const armMat = new THREE.MeshStandardMaterial({
+      color: entry.color,
+      roughness: 0.36,
+      metalness: 0.34,
+    });
+    const rArm = 0.0155;
+    const armRod = meshCylinderBetween(pBase, pBack, rArm, armMat);
+    if (armRod) armGroup.add(armRod);
+
+    const armDir = pBack.clone().sub(pBase);
+    if (armDir.lengthSq() < 1e-8) return;
+    armDir.normalize();
+
+    const intoScreen = pCenter.clone().sub(pBack);
+    if (intoScreen.lengthSq() < 1e-8) intoScreen.set(0, 0, -1);
+    else intoScreen.normalize();
+
+    const diskT = 0.018;
+    const diskR = THREE.MathUtils.clamp(s.w * 0.055, 0.028, 0.048);
+    const diskCenter = pBack.clone().addScaledVector(intoScreen, diskT * 0.5 + 0.006);
+
+    const tilt = new THREE.Mesh(
+      new THREE.CylinderGeometry(diskR, diskR * 0.98, diskT, 22),
+      headMat
+    );
+    tilt.position.copy(diskCenter);
+    tilt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDir);
+    tilt.castShadow = true;
+    armGroup.add(tilt);
+
+    const knob = new THREE.Mesh(
+      new THREE.CylinderGeometry(rArm * 0.5, rArm * 0.5, 0.016, 10),
+      railMat
+    );
+    let side = new THREE.Vector3(1, 0, 0).cross(armDir);
+    if (side.lengthSq() < 1e-8) side = new THREE.Vector3(0, 1, 0).cross(armDir);
+    if (side.lengthSq() > 1e-8) side.normalize();
+    else side.set(1, 0, 0);
+    knob.position.copy(diskCenter).addScaledVector(side, diskR * 0.62);
+    knob.quaternion.copy(tilt.quaternion);
+    knob.castShadow = true;
+    armGroup.add(knob);
+  });
+}
+
+/**
+ * 单侧鞋印（Shape 在 XY 平面：跟朝 −Y、趾朝 +Y），全长约 26cm、宽约 9.5cm — 常见脚印示意比例。
+ * 铺到地上时 rotation.x = −90°，趾大致朝向展厅深处 (+Z)。
+ */
+function createFootprintShapeGeometry() {
+  const sh = new THREE.Shape();
+  const toe = 0.13;
+  const heel = 0.12;
+  const wBall = 0.048;
+  const wArch = 0.022;
+  sh.moveTo(wArch * 0.5, -heel);
+  sh.quadraticCurveTo(wBall * 1.1, -heel * 0.55, wBall * 0.95, -heel * 0.08);
+  sh.lineTo(wBall * 0.82, toe * 0.35);
+  sh.quadraticCurveTo(wBall * 0.55, toe * 0.92, 0, toe);
+  sh.quadraticCurveTo(-wBall * 0.55, toe * 0.9, -wBall * 0.82, toe * 0.32);
+  sh.lineTo(-wBall * 0.95, -heel * 0.1);
+  sh.quadraticCurveTo(-wBall * 1.05, -heel * 0.58, -wArch * 0.9, -heel);
+  sh.quadraticCurveTo(-wArch * 0.2, -heel * 1.05, wArch * 0.5, -heel);
+  return new THREE.ShapeGeometry(sh);
+}
+
+function clearWallMarksGroup() {
+  const mats = new Set();
+  const maps = new Set();
+  while (wallMarksGroup.children.length) {
+    const ch = wallMarksGroup.children.pop();
+    ch.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        if (o.material.map) maps.add(o.material.map);
+        mats.add(o.material);
+      }
+    });
+  }
+  maps.forEach((t) => t.dispose());
+  mats.forEach((m) => m.dispose());
+}
+
+function makeMeterSpriteLabel(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 120;
+  canvas.height = 42;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(120, 235, 210, 0.98)';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText(text, 8, 30);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(0.28, 0.1, 1);
+  return sp;
+}
+
+/** 后墙：右侧米制刻度 + L/C/R 屏高竖带（与屏 cy～cy+h 对齐，便于比高） */
+function updateWallHeightMarks() {
+  clearWallMarksGroup();
+  const zFace = 0.034;
+  const xSpine = WW - 0.042;
+  const tickMajor = new THREE.LineBasicMaterial({ color: 0x5eead4, transparent: true, opacity: 0.82 });
+  const tickMinor = new THREE.LineBasicMaterial({ color: 0x3d7a70, transparent: true, opacity: 0.48 });
+
+  wallMarksGroup.add(
+    new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(xSpine, 0, zFace),
+        new THREE.Vector3(xSpine, WH, zFace),
+      ]),
+      tickMajor
+    )
+  );
+
+  const nDeci = Math.ceil(WH / 0.1) + 1;
+  for (let yi = 0; yi <= nDeci; yi++) {
+    const y = yi * 0.1;
+    if (y > WH + 0.001) break;
+    const isMajor = yi % 5 === 0;
+    const len = isMajor ? 0.09 : 0.038;
+    wallMarksGroup.add(
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(xSpine, y, zFace),
+          new THREE.Vector3(xSpine - len, y, zFace),
+        ]),
+        isMajor ? tickMajor.clone() : tickMinor.clone()
+      )
+    );
+  }
+
+  for (let y = 0; y <= WH + 0.01; y += 0.5) {
+    const lab =
+      Math.abs(y - Math.round(y)) < 1e-6 ? `${Math.round(y)} m` : `${y.toFixed(1)} m`;
+    const sp = makeMeterSpriteLabel(lab);
+    sp.position.set(xSpine - 0.17, y, zFace);
+    wallMarksGroup.add(sp);
+  }
+
+  ['L', 'C', 'R'].forEach((id) => {
+    const s = ITEMS.find((i) => i.id === id);
+    if (!s) return;
+    const geo = new THREE.PlaneGeometry(0.056, s.h);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(s.color),
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const strip = new THREE.Mesh(geo, mat);
+    strip.position.set(s.cx, s.cy + s.h * 0.5, zFace + 0.005);
+    wallMarksGroup.add(strip);
+  });
+}
+
+function updateAudienceFootprints() {
+  while (audienceGroup.children.length) {
+    const o = audienceGroup.children.pop();
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+  function addFoot(x, z, rotY) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x5a9088,
+      transparent: true,
+      opacity: 0.52,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const geom = createFootprintShapeGeometry();
+    const m = new THREE.Mesh(geom, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.y = rotY;
+    m.position.set(x, 0.004, z);
+    audienceGroup.add(m);
+  }
+  const stride = 0.19;
+  const baseX = 2.05;
+  const baseZ = 0.72;
+  addFoot(baseX - stride * 0.5, baseZ, 0.05);
+  addFoot(baseX + stride * 0.5, baseZ + 0.018, 0.05);
+}
+
+function layoutRefresh() {
+  syncCamToSensor();
+  applyRigSlidersToAngles();
+  ITEMS.forEach((it) => syncItemMesh(it));
+  buildArms();
+  updateWallHeightMarks();
+  updateAudienceFootprints();
+}
+
+function showStatus(item) {
+  document.getElementById('status').innerHTML =
+    `<b>${item.emoji} ${item.label.replace('\n', ' ')}</b><br>` +
+    `尺寸: ${item.w.toFixed(3)}×${item.h.toFixed(3)}m<br>` +
+    `<span class="sv">` +
+    `距左墙(中): ${item.cx.toFixed(2)}m<br>` +
+    `底边高度: ${item.cy.toFixed(2)}m<br>` +
+    `视中心高: ${(item.cy + item.h / 2).toFixed(2)}m<br>` +
+    `距后墙(中): ${item.cz.toFixed(2)}m` +
+    (item.ang !== 0 ? `<br>倾角: ${item.ang > 0 ? '+' : ''}${item.ang}°` : '') +
+    `</span>`;
+}
+
+// ── 指针拖拽（水平面 / Shift+竖直面）──────────────────────────────
+let dragState = null;
+
+function pickItemIdFromIntersect(object) {
+  let o = object;
+  while (o && !o.userData.itemId) o = o.parent;
+  return o ? o.userData.itemId : null;
+}
+
+wrap.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(itemGroup.children, true);
+  if (!hits.length) {
+    selectedId = null;
+    layoutRefresh();
+    return;
+  }
+  const id = pickItemIdFromIntersect(hits[0].object);
+  if (!id) return;
+  selectedId = id;
+  const item = ITEMS.find((i) => i.id === id);
+  showStatus(item);
+  layoutRefresh();
+
+  const verticalWall = e.shiftKey;
+  const plane = verticalWall
+    ? new THREE.Plane(new THREE.Vector3(0, 0, 1), -item.cz)
+    : new THREE.Plane(new THREE.Vector3(0, 1, 0), -(item.cy + 0.001));
+  const pt = new THREE.Vector3();
+  raycaster.ray.intersectPlane(plane, pt);
+  dragState = {
+    id,
+    verticalWall,
+    startCx: item.cx,
+    startCy: item.cy,
+    startCz: item.cz,
+    grabX: pt.x,
+    grabZ: pt.z,
+    grabY: pt.y,
+  };
+  controls.enabled = false;
+  wrap.setPointerCapture(e.pointerId);
+});
+
+wrap.addEventListener('pointermove', (e) => {
+  if (!dragState) return;
+  const item = ITEMS.find((i) => i.id === dragState.id);
+  if (!item) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const plane = dragState.verticalWall
+    ? new THREE.Plane(new THREE.Vector3(0, 0, 1), -dragState.startCz)
+    : new THREE.Plane(new THREE.Vector3(0, 1, 0), -(item.cy + 0.001));
+  const pt = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(plane, pt)) return;
+
+  if (dragState.verticalWall) {
+    const dx = pt.x - dragState.grabX;
+    const dy = pt.y - dragState.grabY;
+    let ncx = dragState.startCx + dx;
+    let ncy = dragState.startCy + dy;
+    ncx = Math.max(item.w / 2, Math.min(WW - item.w / 2, ncx));
+    ncy = Math.max(0, Math.min(WH - item.h, ncy));
+    item.cx = ncx;
+    item.cy = ncy;
+  } else {
+    const dx = pt.x - dragState.grabX;
+    const dz = pt.z - dragState.grabZ;
+    let ncx = dragState.startCx + dx;
+    let ncz = dragState.startCz + dz;
+    ncx = Math.max(item.w / 2, Math.min(WW - item.w / 2, ncx));
+    ncz = Math.max(0, Math.min(WD - item.d / 2, ncz));
+    item.cx = ncx;
+    item.cz = ncz;
+  }
+  layoutRefresh();
+  showStatus(item);
+});
+
+function endDrag(e) {
+  if (!dragState) return;
+  const item = ITEMS.find((i) => i.id === dragState.id);
+  if (item && (item.id === 'L' || item.id === 'C' || item.id === 'R')) {
+    const cm = parseInt(document.getElementById('rig-reach').value, 10);
+    CLUSTER_CZ0[item.id] = item.cz - cm / 100;
+  }
+  dragState = null;
+  controls.enabled = true;
+  try {
+    if (e && e.pointerId != null) wrap.releasePointerCapture(e.pointerId);
+  } catch (_) { /* ignore */ }
+}
+
+wrap.addEventListener('pointerup', endDrag);
+wrap.addEventListener('pointercancel', endDrag);
+
+wrap.addEventListener('pointermove', (e) => {
+  if (dragState) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(itemGroup.children, true);
+  if (!hits.length) return;
+  const id = pickItemIdFromIntersect(hits[0].object);
+  if (!id) return;
+  showStatus(ITEMS.find((i) => i.id === id));
+});
+
+// ── 控制台绑定（与原版一致）──────────────────────────────────────
+function _syncAnchorSlider(key) {
+  if (key === 'L') {
+    const sl = document.getElementById('anchor-slider-L');
+    const vl = document.getElementById('anchor-val-L');
+    if (sl) sl.value = String(Math.round(ARM_ANCHOR_DATA.L.anchorH * 100));
+    if (vl) vl.textContent = ARM_ANCHOR_DATA.L.anchorH.toFixed(2) + 'm';
+  } else if (key === 'C') {
+    const sc = document.getElementById('anchor-slider-C');
+    const vc = document.getElementById('anchor-val-C');
+    if (sc) sc.value = String(Math.round(ARM_ANCHOR_DATA.C.anchorH_off * 100));
+    if (vc) vc.textContent = '+' + Math.round(ARM_ANCHOR_DATA.C.anchorH_off * 100) + 'cm';
+  } else if (key === 'R') {
+    const sr = document.getElementById('anchor-slider-R');
+    const vr = document.getElementById('anchor-val-R');
+    if (sr) sr.value = String(Math.round(ARM_ANCHOR_DATA.R.anchorH * 100));
+    if (vr) vr.textContent = ARM_ANCHOR_DATA.R.anchorH.toFixed(2) + 'm';
+  }
+}
+
+function bindAngSlider(idSlider, idVal, fmt) {
+  const el = document.getElementById(idSlider);
+  const v = document.getElementById(idVal);
+  el.addEventListener('input', () => {
+    v.textContent = fmt ? fmt(el.value) : el.value + '°';
+    layoutRefresh();
+  });
+}
+bindAngSlider('ang-slider-L', 'ang-val-L', (x) => x + '°');
+bindAngSlider('ang-slider-R', 'ang-val-R', (x) => x + '°');
+bindAngSlider('ang-slider-C', 'ang-val-C', (x) => x + '°');
+
+function bindAnchorSlider(idSlider, idVal, fmt) {
+  const el = document.getElementById(idSlider);
+  const v = document.getElementById(idVal);
+  el.addEventListener('input', () => {
+    v.textContent = fmt(el.value);
+    layoutRefresh();
+  });
+}
+bindAnchorSlider('anchor-slider-L', 'anchor-val-L', (x) => {
+  ARM_ANCHOR_DATA.L.anchorH = parseInt(x, 10) / 100;
+  return (parseInt(x, 10) / 100).toFixed(2) + 'm';
+});
+bindAnchorSlider('anchor-slider-C', 'anchor-val-C', (x) => {
+  ARM_ANCHOR_DATA.C.anchorH_off = parseInt(x, 10) / 100;
+  return '+' + x + 'cm';
+});
+bindAnchorSlider('anchor-slider-R', 'anchor-val-R', (x) => {
+  ARM_ANCHOR_DATA.R.anchorH = parseInt(x, 10) / 100;
+  return (parseInt(x, 10) / 100).toFixed(2) + 'm';
+});
+
+document.getElementById('rig-yaw').addEventListener('input', function () {
+  const v = parseInt(this.value, 10);
+  document.getElementById('rig-yaw-val').textContent = (v > 0 ? '+' : '') + v + '°';
+  layoutRefresh();
+});
+document.getElementById('rig-reach').addEventListener('input', () => {
+  applyClusterReach();
+  layoutRefresh();
+});
+
+// ── JSON 导入导出（phantaprism-layout-editor）──────────────────────
+const LAYOUT_SNAPSHOT_VERSION = 1;
+
+function collectLayoutSnapshot() {
+  return {
+    version: LAYOUT_SNAPSHOT_VERSION,
+    format: 'phantaprism-layout-editor',
+    savedAt: new Date().toISOString(),
+    room: { WW, WH, WD },
+    items: ITEMS.map((it) => ({ id: it.id, cx: it.cx, cy: it.cy, cz: it.cz, ang: it.ang })),
+    armAnchor: JSON.parse(JSON.stringify(ARM_ANCHOR_DATA)),
+    sliders: {
+      rigYaw: parseInt(document.getElementById('rig-yaw').value, 10),
+      rigReach: parseInt(document.getElementById('rig-reach').value, 10),
+      angL: parseInt(document.getElementById('ang-slider-L').value, 10),
+      angR: parseInt(document.getElementById('ang-slider-R').value, 10),
+      angC: parseInt(document.getElementById('ang-slider-C').value, 10),
+      anchorL: parseInt(document.getElementById('anchor-slider-L').value, 10),
+      anchorC: parseInt(document.getElementById('anchor-slider-C').value, 10),
+      anchorR: parseInt(document.getElementById('anchor-slider-R').value, 10),
+    },
+  };
+}
+
+function exportLayoutJson() {
+  const data = collectLayoutSnapshot();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.href = URL.createObjectURL(blob);
+  a.download = 'phantaprism-layout-' + stamp + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  const msg = document.getElementById('layout-io-msg');
+  if (msg) { msg.textContent = '已导出 JSON'; msg.classList.remove('err'); }
+}
+
+function importLayoutSnapshot(data) {
+  const msg = document.getElementById('layout-io-msg');
+  const fail = (t) => { if (msg) { msg.textContent = t; msg.classList.add('err'); } return false; };
+  const pass = (t) => { if (msg) { msg.textContent = t; msg.classList.remove('err'); } return true; };
+
+  if (!data || typeof data !== 'object') return fail('不是有效的 JSON');
+  if (data.version !== LAYOUT_SNAPSHOT_VERSION) return fail('版本需为 ' + LAYOUT_SNAPSHOT_VERSION);
+  if (!Array.isArray(data.items)) return fail('缺少 items');
+  if (data.items.length !== ITEMS.length) return fail('元素数量与当前页不一致');
+
+  let note = '';
+  if (data.room && (data.room.WW !== WW || data.room.WH !== WH || data.room.WD !== WD)) {
+    note = '房间尺寸与存档不同，已仍导入坐标。 ';
+  }
+
+  const byId = {};
+  for (let i = 0; i < data.items.length; i++) {
+    const s = data.items[i];
+    if (!s || !s.id) return fail('items 中有缺 id 的项');
+    byId[s.id] = s;
+  }
+  for (let j = 0; j < ITEMS.length; j++) {
+    if (!byId[ITEMS[j].id]) return fail('缺少元素 id: ' + ITEMS[j].id);
+  }
+
+  data.items.forEach((s) => {
+    const it = ITEMS.find((i) => i.id === s.id);
+    if (!it) return;
+    it.cx = Number(s.cx); it.cy = Number(s.cy); it.cz = Number(s.cz);
+    if (s.id !== 'L' && s.id !== 'C' && s.id !== 'R') it.ang = Number(s.ang);
+  });
+
+  const aa = data.armAnchor;
+  if (aa && aa.L && aa.C && aa.R) {
+    ARM_ANCHOR_DATA.L.ax_off = Number(aa.L.ax_off);
+    ARM_ANCHOR_DATA.L.anchorH = Number(aa.L.anchorH);
+    ARM_ANCHOR_DATA.C.ax_off = Number(aa.C.ax_off);
+    ARM_ANCHOR_DATA.C.anchorH_off = Number(aa.C.anchorH_off);
+    ARM_ANCHOR_DATA.R.ax_off = Number(aa.R.ax_off);
+    ARM_ANCHOR_DATA.R.anchorH = Number(aa.R.anchorH);
+  }
+
+  const sl = data.sliders;
+  if (!sl) return fail('缺少 sliders');
+  document.getElementById('rig-yaw').value = sl.rigYaw;
+  document.getElementById('rig-yaw-val').textContent = (sl.rigYaw > 0 ? '+' : '') + sl.rigYaw + '°';
+  document.getElementById('rig-reach').value = sl.rigReach;
+  document.getElementById('rig-reach-val').textContent = (sl.rigReach >= 0 ? '+' : '') + sl.rigReach + 'cm';
+  document.getElementById('ang-slider-L').value = sl.angL;
+  document.getElementById('ang-slider-R').value = sl.angR;
+  document.getElementById('ang-slider-C').value = sl.angC;
+  document.getElementById('ang-val-L').textContent = sl.angL + '°';
+  document.getElementById('ang-val-R').textContent = sl.angR + '°';
+  document.getElementById('ang-val-C').textContent = sl.angC + '°';
+  document.getElementById('anchor-slider-L').value = sl.anchorL;
+  document.getElementById('anchor-slider-C').value = sl.anchorC;
+  document.getElementById('anchor-slider-R').value = sl.anchorR;
+
+  _syncAnchorSlider('L');
+  _syncAnchorSlider('C');
+  _syncAnchorSlider('R');
+
+  applyRigSlidersToAngles();
+  const cm = parseInt(document.getElementById('rig-reach').value, 10);
+  ['L', 'C', 'R'].forEach((id) => {
+    const it = ITEMS.find((i) => i.id === id);
+    CLUSTER_CZ0[id] = it.cz - cm / 100;
+  });
+
+  layoutRefresh();
+  return pass(note + '已导入');
+}
+
+document.getElementById('btn-export-layout').addEventListener('click', exportLayoutJson);
+const btnI = document.getElementById('btn-import-layout');
+const fin = document.getElementById('import-layout-file');
+btnI.addEventListener('click', () => fin.click());
+fin.addEventListener('change', function () {
+  const f = this.files && this.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      importLayoutSnapshot(JSON.parse(rd.result));
+    } catch (err) {
+      const m = document.getElementById('layout-io-msg');
+      if (m) {
+        m.textContent = '无法读取：' + (err && err.message ? err.message : String(err));
+        m.classList.add('err');
+      }
+    }
+    fin.value = '';
+  };
+  rd.readAsText(f, 'utf-8');
+});
+
+// 元素列表
+const pl = document.getElementById('plist');
+ITEMS.forEach((item) => {
+  const row = document.createElement('div');
+  row.className = 'pitem';
+  row.innerHTML = `<div class="pdot" style="border-color:${item.color};background:${item.color}22"></div><span>${item.emoji} ${item.label.replace('\n', ' ')}</span>`;
+  pl.appendChild(row);
+});
+
+function onResize() {
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w < 2 || h < 2) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+new ResizeObserver(onResize).observe(wrap);
+
+function tick() {
+  requestAnimationFrame(tick);
+  controls.update();
+  renderer.render(scene, camera);
+}
+onResize();
+layoutRefresh();
+tick();
+</script>
+</body>
+</html>
