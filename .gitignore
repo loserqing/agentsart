@@ -21,3 +21,6 @@ iteration_log.json
 # OS
 .DS_Store
 Thumbs.db
+
+# 本地展陈/演示页，不纳入版本库
+social.html
