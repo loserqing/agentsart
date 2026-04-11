@@ -639,6 +639,7 @@ class FullOrchestrator:
 【Three r160 兼容（精简）】
 - 禁止 ShaderMaterial / RawShaderMaterial / 自定义 GLSL，只用内置材质，顶点动画在 JS animate 循环中计算。
 - 禁止 THREE.Geometry / Face3 / fromGeometry()，只用 BufferGeometry + setAttribute。
+- 禁止 `THREE.TorusKnot`（r160 无此曲线类）；需结线轨迹时用 `THREE.TorusKnotGeometry` 或对中心线参数 `u` 按官方公式采样点/切线，勿调用不存在的 `.getPoints()`。
 - `color` / `emissive` / `sheenColor` 等：构造参数里用 `new THREE.Color(0x……)` 或 `.setHex()` / `.set()`；animate 里对已有 Color 再 `.copy()` / `.setHSL()`。避免把「应持续为 Color 对象」的属性改成裸数字或普通对象（易在 uniform 上传时报错）。
 - **InstancedMesh（含 `setColorAt` / `vertexColors` / 每帧改实例色）**：主体材质**优先 `MeshStandardMaterial`**（metalness / roughness / emissive 即可做出金属与高光感）。**规避** `MeshPhysicalMaterial` + **`sheen > 0`**（及 `sheenColor` / `sheenRoughness`）与该组合同用——在部分 WebGL2 上会触发 **`uniform3fv` /「@@iterator」类 TypeError**（与 r160 引擎 + 升级后 shader 路径有关）。若必须用 Physical（如 clearcoat）且带实例色，则 **`sheen` 必须为 0** 且不传 sheen 相关色参。
 - 非 Instanced、单体 Mesh 使用 `MeshPhysicalMaterial` 时：`sheen` 为 **0～1 数值**；`sheenColor` 用 `new THREE.Color()`。**禁止**把 `THREE.Color` 赋给 `sheen`。尽量不要用 `transmission`+`thickness` 薄玻璃栈（易与光照不匹配）；非需要时不要设 `thickness`。
@@ -679,7 +680,7 @@ class FullOrchestrator:
 2. 缺少 animate() / requestAnimationFrame / renderer.render → 补上
 3. 使用了 OrbitControls / GLTFLoader 等未引入依赖 → 删除相关代码
 4. 使用了 ShaderMaterial / 自定义 GLSL → 替换为内置材质，将动画移至 JS 循环
-5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute
+5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute；或使用了 `THREE.TorusKnot`（r160 已移除）→ 改为 `THREE.TorusKnotGeometry` / 按结线参数 `u` 手写采样点与切线
 6. 使用了 renderer.outputEncoding / sRGBEncoding / LinearEncoding → 删除，改为 renderer.outputColorSpace = THREE.SRGBColorSpace
 7. material.color / emissive 等误赋裸数字破坏 Color → 改为 `new THREE.Color()` / `.setHex()`；MeshPhysicalMaterial：`sheen` 应为数值，`sheenColor` 用 Color；勿把 Color 赋给 `sheen`；无薄玻璃需求时不要滥用 transmission/thickness
 8. 混入了 HTML / Markdown / `<script>` 标签 → 删除

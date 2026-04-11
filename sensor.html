@@ -10,13 +10,14 @@
             --neon-blue: #3d5afe; 
             --neon-pink: #d500f9; 
             --neon-gold: #00e5ff; 
-            --bg-dark: #050a10;
+            /* 与 social.html 页底/深邃背景对齐 */
+            --bg-dark: #01040a;
         }
         body, html {
             margin: 0; padding: 0;
             width: 100%; height: 100%;
             overflow: hidden;
-            background-color: #000;
+            background-color: #01040a;
             font-family: 'Segoe UI', 'PingFang SC', 'Courier New', monospace;
         }
         canvas {
@@ -52,7 +53,7 @@
             letter-spacing: 0.04em;
             text-transform: uppercase;
             color: rgba(0, 229, 255, 0.88);
-            background: rgba(5, 10, 18, 0.58);
+            background: rgba(0, 10, 20, 0.4);
             border: 1px solid rgba(0, 229, 255, 0.22);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -74,7 +75,7 @@
             z-index: 80;
             display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
             padding: 24px 36px; border-radius: 14px;
-            background: rgba(5, 10, 18, 0.72);
+            background: rgba(0, 10, 20, 0.4);
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(0, 229, 255, 0.22);
             box-shadow: 0 0 40px rgba(0, 229, 255, 0.08);
@@ -516,7 +517,7 @@
                     var v = 0.0; var a = 0.5;
                     let rot = mat2x2<f32>(cos(0.57), sin(0.57), -sin(0.57), cos(0.57));
                     var p_mut = p;
-                    for (var i = 0; i < 6; i = i + 1) { // 稍微降低迭代次数以兼顾粒子渲染性能
+                    for (var i = 0; i < 7; i = i + 1) { // 与 social.html 流体 fbm 八度数一致
                         v += a * noise(p_mut);
                         p_mut = rot * p_mut * 2.15 + vec2<f32>(100.0);
                         a *= 0.48;
@@ -566,22 +567,25 @@
                     let insideUv = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
                     let tideMul = mix(1.0, 0.28, insideUv);
 
+                    // uniforms.time 为秒级（与 social 一致）；系数缩小以保持原先缓慢漂移感
                     let tide = vec2<f32>(
-                        sin(uniforms.time * 0.12 + uv.y * 0.3 + layPhase * 4.2 + layWave.x) * 0.011,
-                        cos(uniforms.time * 0.09 + uv.x * 0.25 + layPhase * 3.1 + layWave.y) * 0.0085
+                        sin(uniforms.time * 0.0048 + uv.y * 0.3 + layPhase * 4.2 + layWave.x) * 0.011,
+                        cos(uniforms.time * 0.0036 + uv.x * 0.25 + layPhase * 3.1 + layWave.y) * 0.0085
                     ) * tideMul;
                     p = p + tide;
 
                     var acc = vec2<f32>(0.0, 0.0);
                     var nearLoose = 0.0;
                     var nearTight = 0.0;
-                    let kFace = 6.35 - uniforms.volatility * 0.28;
+                    // 脸部引力/宽场：k 越大、decay 越陡 → 影响圈越贴轮廓（避免脸周一圈过大）
+                    let kFace = 9.15;
+                    let faceDecaySteep = 1.38;
                     let pr = uniforms.presence;
 
                     for (var i: i32 = 0; i < 160; i = i + 1) {
                         if (i >= nF) { break; }
                         let s = segments[i];
-                        let m = segment_metrics(p, s.x, s.y, s.z, s.w, kFace, pr, 1.0);
+                        let m = segment_metrics(p, s.x, s.y, s.z, s.w, kFace, pr, faceDecaySteep);
                         acc = acc + m.xy;
                         nearLoose = max(nearLoose, m.z);
                         let skipTight = (i >= dLo) && (i < dHi);
@@ -621,15 +625,17 @@
                     }
 
                     let wsum = max(length(acc), 1e-6);
-                    let pullAmp = 0.0042 + uniforms.motion * 0.0032 + uniforms.presence * 0.0024;
+                    let pullAmp = 0.00335 + uniforms.motion * 0.0026 + uniforms.presence * 0.0019;
 
                     let pForFaceMask = p;
                     let faceIn = face_interior_winding(pForFaceMask, nF) * uniforms.contour_fade * sb;
                     let driftScale = mix(1.0, 0.48, faceIn);
-                    let drift = (acc / wsum) * pullAmp * driftScale;
+                    // 仅轮廓/脸邻域施加引力位移，避免远处像素被 acc 统一拽向脸
+                    let driftMask = clamp(nearLoose * nearLoose * 7.4 + nearTight * nearTight * 4.2 + faceIn * 0.5, 0.0, 1.0);
+                    let drift = (acc / wsum) * pullAmp * driftScale * driftMask;
 
                     p = p + drift;
-                    let cnL = clamp(nearLoose * (1.02 + uniforms.presence * 0.16), 0.0, 1.0);
+                    let cnL = clamp(nearLoose * (1.0 + uniforms.presence * 0.085), 0.0, 1.0);
                     let lineA = clamp(uniforms.contour_line_alpha, 0.0, 1.0);
                     let cnT = clamp(nearTight * (1.1 + uniforms.presence * 0.12) * lineA, 0.0, 1.0);
                     let dbg = uniforms.contour_debug;
@@ -637,20 +643,44 @@
                     let cnLVis = cnL * (1.0 - dbg);
 
                     // 脸外流体：相位仅由 time + 空间权重驱动，不叠情绪缓变（否则长时间观感持续漂移）
-                    let faceFluidW = clamp(max(faceIn, cnLVis * 0.52), 0.0, 1.0);
+                    let faceFluidW = clamp(max(faceIn, cnLVis * 0.36), 0.0, 1.0);
                     let farFluid = 1.0 - faceFluidW;
-                    let t = uniforms.time * mix(1.05 + uniforms.motion * 0.06, 0.92 + uniforms.motion * 0.22 * cnLVis, faceFluidW);
+
+                    // —— social.html 同源全屏 fbm（uv / p / t 与 social 片段着色器一致；与 toNdc 线段无关）——
+                    var pSoc = (uv - vec2<f32>(0.5)) * 2.0;
+                    pSoc.x = pSoc.x * res.x / res.y;
+                    // 与 social.html 默认 data.volatility=0.125 一致；不受脸部 trackedMotion 调制
+                    let volBg = 0.125;
+                    let tSoc = uniforms.time * (0.035 + volBg * 0.05);
+                    let qSoc = vec2<f32>(fbm(pSoc + vec2<f32>(0.0)), fbm(pSoc + vec2<f32>(1.0)));
+                    let rSoc = vec2<f32>(
+                        fbm(pSoc + 4.0 * qSoc + vec2<f32>(1.7, 9.2) + tSoc * 0.7),
+                        fbm(pSoc + 4.0 * qSoc + vec2<f32>(8.3, 2.8) + tSoc * 0.6)
+                    );
+                    let fSoc = fbm(pSoc + 4.0 * rSoc);
+                    let socDeep = vec3<f32>(0.01, 0.03, 0.08);
+                    let socMid = vec3<f32>(0.04, 0.10, 0.28);
+                    let socCyan = vec3<f32>(0.0, 0.75, 0.90);
+                    var colSoc = mix(socDeep, socMid, clamp(length(qSoc), 0.0, 1.0));
+                    colSoc = mix(colSoc, socCyan, clamp(pow(fSoc, 2.0) * 1.5, 0.0, 1.0));
+                    let scanLn = sin(fragCoord.y * 1.4) * 0.015;
+                    let rgbSocialScan = (fSoc * fSoc * fSoc + 0.6 * fSoc * fSoc + 0.45 * fSoc) * colSoc - vec3<f32>(scanLn, scanLn, scanLn);
+
+                    // 远场相位=volBg（与 tSoc 一致）；仅近轮廓/脸周混入随脸反应的 volatility
+                    let volNear = mix(volBg, uniforms.volatility, clamp(faceFluidW * 1.15, 0.0, 1.0));
+                    let tFlow = uniforms.time * (0.035 + volNear * 0.05) * mix(1.0, 0.62, faceFluidW);
 
                     let flowMul = mix(1.0, 0.30, faceIn);
 
                     // 远场不受 silhouette 渐显「砍半」；近脸/轮廓仍保留原 sb 柔化，避免进出画时跳变
                     let sbWiggle = mix(mix(0.5, 1.0, sb), 1.0, farFluid);
                     let ampNear = uniforms.motion * 0.0016 * cnLVis + cnLVis * 0.0032 + uniforms.emotion_tension * 0.014 * cnLVis;
-                    let amp = (0.003 + ampNear + farFluid * 0.0025) * sbWiggle * flowMul;
+                    // 远场减弱微摆动，更接近 social 的纯 fbm 流动
+                    let amp = (0.0016 + ampNear * 0.65 + farFluid * 0.00135) * sbWiggle * flowMul;
 
                     p = p + vec2<f32>(
-                        sin((p.y + t * flowMul) * 3.4 + cnLVis * 3.7 + layWave.y * 0.15),
-                        cos((p.x - t * flowMul) * 3.2 - cnLVis * 3.2 - layPhase * 0.4)
+                        sin((p.y + tFlow * flowMul) * 3.4 + cnLVis * 3.7 + layWave.y * 0.15),
+                        cos((p.x - tFlow * flowMul) * 3.2 - cnLVis * 3.2 - layPhase * 0.4)
                     ) * amp;
                     
                     let sbFbm = mix(mix(0.45, 1.0, sb), 1.0, farFluid);
@@ -661,17 +691,13 @@
                     ) * pFbmWarp;
 
                     let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
-                    let tOscMul = mix(1.0, 0.45, faceIn);
-                    let tOsc = vec2<f32>(
-                        sin(uniforms.time * 0.38 + layPhase * 2.1) * 1.85,
-                        cos(uniforms.time * 0.33 + layWave.x * 0.5) * 1.85
-                    ) * tOscMul;
                     let r = vec2<f32>(
-                        fbm(pFbm + 3.05 * q + vec2<f32>(1.7, 9.2) + tOsc),
-                        fbm(pFbm + 3.05 * q + vec2<f32>(8.3, 2.8) + vec2<f32>(tOsc.y * 0.85, tOsc.x * 0.85))
+                        fbm(pFbm + 4.0 * q + vec2<f32>(1.7, 9.2) + tFlow * 0.7),
+                        fbm(pFbm + 4.0 * q + vec2<f32>(8.3, 2.8) + tFlow * 0.6)
                     );
-                    var f = fbm(pFbm + 3.05 * r);
-                    f = f * (1.0 - cnLVis * 0.06) + cnLVis * 0.038 * sin(f * 10.5 + sin(uniforms.time * 0.52 + layPhase * 1.7) * 2.8) * mix(1.0, 0.55, faceIn);
+                    var f = fbm(pFbm + 4.0 * r);
+                    // 禁止 sin(f*高频+时间)：在 cnLVis 高的脸周会形成随时间移动的等值「圈纹」；仅做轻微对比与极低频呼吸
+                    f = f * (1.0 - cnLVis * 0.055) + cnLVis * 0.006 * sin(tFlow * 0.18 + layPhase * 0.9) * mix(0.35, 1.0, faceIn);
 
                     let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
                     let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
@@ -683,8 +709,11 @@
                     let cyanMix = pow(f, 2.0) * 1.5 * (0.88 + cnLVis * 0.09 * mix(0.5, 1.0, sb) + cnTForFluid * 0.095 * mix(0.45, 1.0, sb));
                     color = mix(color, cyanBright, clamp(cyanMix, 0.0, 1.0));
                     
-                    let finalColor = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.03 * cnLVis);
-                    var outRgb = finalColor - sin(fragCoord.y * 1.4) * 0.015;
+                    let finalWarp = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.014 * cnLVis);
+                    let warpedScan = finalWarp - vec3<f32>(scanLn, scanLn, scanLn);
+                    // 远场几乎等同 social；近轮廓/脸内以扭曲层为主
+                    let blendSocial = clamp(pow(farFluid, 1.08) * 0.985 + (1.0 - sb) * 0.22, 0.0, 1.0);
+                    var outRgb = mix(warpedScan, rgbSocialScan, blendSocial);
 
                     // Face area → intensity boost (closer = brighter contour & flow)
                     let areaBoost = clamp(uniforms.face_area * 3.5, 0.0, 1.0);
@@ -765,7 +794,6 @@
         }
 
         let lastTime = null;
-        let accumulatedPhase = 0;
         let lastFaceCenter = null;
         let trackedMotion = 0;
         let trackedPresence = 0;
@@ -1042,10 +1070,7 @@
             const deltaTime = time - lastTime;
             lastTime = time;
             const dtSeconds = Math.max(0.001, Math.min(0.05, deltaTime * 0.001));
-            
-            accumulatedPhase += deltaTime * 0.001 * 0.04;
-            if (accumulatedPhase > 1e5) accumulatedPhase -= 1e5;
-            
+
             const canvas = document.getElementById('gpuCanvas');
             updateTracking(dtSeconds);
 
@@ -1126,9 +1151,10 @@
 
             _uniformScratch[0] = canvas.width;
             _uniformScratch[1] = canvas.height;
-            _uniformScratch[2] = accumulatedPhase;
-            _uniformScratch[3] = 0.35 + trackedMotion * 0.55;
-            _uniformScratch[4] = 0.08 + trackedMotion * 0.35;
+            // 与 social.html 一致：requestAnimationFrame 毫秒时间 → 秒，供 WGSL 中 (0.035 + vol*0.05) 调速
+            _uniformScratch[2] = time * 0.001;
+            _uniformScratch[3] = 0.44 + trackedMotion * 0.45;
+            _uniformScratch[4] = 0.125 + trackedMotion * 0.22;
             _uniformScratch[5] = Math.min(0.42, trackedMotion);
             _uniformScratch[6] = trackedPresence;
             _uniformScratch[7] = trackedLeftPresence;

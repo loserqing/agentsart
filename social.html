@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法之迹：2026 全球 AI 经济共振监测系统</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #01040a;
+            font-family: 'Segoe UI', 'PingFang SC', 'Courier New', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100vw; height: 100vh;
+        }
+        /* 仿真终端界面 */
+        #ui {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            padding: 40px;
+            box-sizing: border-box;
+            color: rgba(0, 255, 255, 0.7);
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .header {
+            border-left: 2px solid #00d2ff;
+            padding-left: 20px;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: 200;
+            letter-spacing: 8px;
+            margin: 0;
+            text-transform: uppercase;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+        }
+        .data-stream {
+            margin-top: 12px;
+            font-size: 10px;
+            opacity: 0.5;
+            letter-spacing: 1px;
+            font-family: monospace;
+            height: 1.2em;
+            overflow: hidden;
+        }
+        .stats-panel {
+            display: flex;
+            gap: 60px;
+            background: rgba(0, 10, 20, 0.4);
+            backdrop-filter: blur(20px);
+            padding: 25px 40px;
+            border: 1px solid rgba(0, 210, 255, 0.15);
+            width: fit-content;
+            border-radius: 2px;
+        }
+        .stat-item {
+            display: flex; flex-direction: column;
+        }
+        .stat-label { 
+            font-size: 8px; 
+            opacity: 0.4; 
+            margin-bottom: 8px; 
+            text-transform: uppercase; 
+            letter-spacing: 2px;
+        }
+        .stat-value { 
+            font-size: 20px; 
+            color: #00e5ff; 
+            font-weight: 300; 
+            font-family: 'Consolas', monospace;
+        }
+        
+        #error-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: none;
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #00ffff; text-align: center; z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="header">
+            <h1 class="title">ALGORITHMIC WAKE V2.2</h1>
+            <div class="data-stream" id="ticker">SYSTEM ACTIVE // DATE: 2026.03.01 // SYNCING GLOBAL AI IMPACT METRICS...</div>
+        </div>
+
+        <div class="stats-panel">
+            <div class="stat-item">
+                <div class="stat-label">Tech Displaced (2026 Q1)</div>
+                <div class="stat-value" id="val-layoffs">30,700</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">NVDA Market Cap (Est)</div>
+                <div class="stat-value" id="val-mcap">$4.82T</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Global AI Agentic Shift</div>
+                <div class="stat-value" id="val-replacement">44.00%</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-overlay">
+        <h2>WEBGPU CORE NOT DETECTED</h2>
+        <p id="error-msg">请使用支持 WebGPU 的现代浏览器访问</p>
+    </div>
+
+    <canvas id="gpuCanvas"></canvas>
+
+    <script type="module">
+        // --- WGSL 着色器核心：靛青与青的深度拓扑 ---
+        const shaderCode = `
+        struct Uniforms {
+            res: vec2<f32>,
+            time: f32,
+            impact: f32, 
+            volatility: f32,
+        };
+        @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+        fn hash(p: vec2<f32>) -> f32 {
+            var p3 = fract(vec3<f32>(p.xyx) * 0.13);
+            p3 += dot(p3, p3.yzx + 3.33);
+            return fract((p3.x + p3.y) * p3.z);
+        }
+
+        fn noise(p: vec2<f32>) -> f32 {
+            let i = floor(p);
+            let f = fract(p);
+            let u = f * f * (3.0 - 2.0 * f);
+            return mix(
+                mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+                mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), 
+                u.y
+            );
+        }
+
+        fn fbm(p: vec2<f32>) -> f32 {
+            var v = 0.0;
+            var a = 0.5;
+            let rot = mat2x2<f32>(cos(0.57), sin(0.57), -sin(0.57), cos(0.57));
+            var p_mut = p;
+            for (var i = 0; i < 7; i = i + 1) {
+                v += a * noise(p_mut);
+                p_mut = rot * p_mut * 2.15 + vec2<f32>(100.0);
+                a *= 0.48;
+            }
+            return v;
+        }
+
+        @vertex
+        fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+            var pos = array<vec2<f32>, 3>(
+                vec2(-1.0, -1.0), vec2( 3.0, -1.0), vec2(-1.0,  3.0)
+            );
+            return vec4<f32>(pos[vertexIndex], 0.0, 1.0);
+        }
+
+        @fragment
+        fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
+            let res = uniforms.res;
+            var uv = fragCoord.xy / res.xy;
+            
+            var p = (uv - 0.5) * 2.0;
+            p.x *= res.x / res.y;
+
+            // 保持深邃缓慢的流动感
+            let t = uniforms.time * (0.035 + uniforms.volatility * 0.05);
+            
+            let q = vec2<f32>(fbm(p + vec2<f32>(0.0)), fbm(p + vec2<f32>(1.0)));
+            let r = vec2<f32>(
+                fbm(p + 4.0 * q + vec2<f32>(1.7, 9.2) + t * 0.7),
+                fbm(p + 4.0 * q + vec2<f32>(8.3, 2.8) + t * 0.6)
+            );
+
+            let f = fbm(p + 4.0 * r);
+
+            // 靛青-青 调色方案
+            let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
+            let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
+            let cyanBright = vec3<f32>(0.0, 0.75, 0.90);   
+
+            var color = mix(indigoDeep, indigoMid, clamp(length(q), 0.0, 1.0));
+            color = mix(color, cyanBright, clamp(pow(f, 2.0) * 1.5, 0.0, 1.0));
+            
+            let finalColor = (f * f * f + 0.6 * f * f + 0.45 * f) * color;
+            let scan = sin(fragCoord.y * 1.4) * 0.015;
+            
+            return vec4<f32>(finalColor - scan, 1.0);
+        }
+        `;
+
+        // --- 2026 深度新闻库与数据仿真 ---
+        const newsArchive = [
+            ">> NVIDIA (NVDA) 公布 FY26 Q4 财报：营收 681 亿美元，AI 芯片市场份额升至 92%",
+            ">> Block (Square) CEO 杰克·多西宣布：AI 效率提升显著，全公司范围内精简 40% 岗位",
+            ">> Salesforce 正式上线 Agentforce 2.0：企业级自主 AI 代理规模化替代传统 SaaS 界面",
+            ">> OpenAI 宣布 AGI 阶段 3 已达成：Gemini 3.0 与 GPT-5 正式进入实时多模态共振模式",
+            ">> 欧盟《人工智能问责法》(AAA) 正式实施：针对 AI 导致的劳动力流失征收“自动化税”",
+            ">> 高盛报告：2026 年初全球超过 3.5 亿个行政类岗位已受 AI 代理化直接影响",
+            ">> 苹果 Siri Pro 2.0 随 M5 芯片发布：全本地化隐私 AI 推理改变个人计算范式",
+            ">> 纳斯达克：由于 AI 基础设施能源短缺担忧，数据中心板块出现季节性波动",
+            ">> 微软 Azure AI 云算力突破 500 EFlops：单日处理数据量超 20 世纪全人类记录总和",
+            ">> 自动驾驶卡车在全美 14 个州正式合法化：传统物流业迎来拓扑级结构重组",
+            ">> 谷歌 DeepMind：AlphaFold 4.0 预测 2026 年将诞生首款完全由 AI 设计的定制化抗癌药物",
+            ">> 行业调研：2026 年初“Agentic Shift”指数首次突破 40% 阈值，社会化 AI 生产力成为主流"
+        ];
+
+        let data = {
+            impact: 0.44,       // AI 替代指数
+            volatility: 0.125,  // 波动率
+            layoffs: 30700,     // 2026 第一季度累计裁员
+            mcap: 4.82,         // NVIDIA 估值
+            targetVolatility: 0.125
+        };
+
+        function lerp(start, end, amt) {
+            return (1 - amt) * start + amt * end;
+        }
+
+        function updateSimulation() {
+            // 模拟 2026 的宏观经济波动
+            if(Math.random() > 0.995) {
+                data.targetVolatility = 0.05 + Math.random() * 0.25;
+            }
+
+            data.volatility = lerp(data.volatility, data.targetVolatility, 0.003);
+            
+            // 数据在展示时产生细微的动态增量
+            if(Math.random() > 0.95) data.layoffs += 1;
+            if(Math.random() > 0.98) data.mcap += 0.001;
+
+            // UI 更新
+            document.getElementById('val-replacement').innerText = (data.impact * 100).toFixed(2) + "%";
+            document.getElementById('val-layoffs').innerText = data.layoffs.toLocaleString();
+            document.getElementById('val-mcap').innerText = "$" + data.mcap.toFixed(2) + "T";
+
+            // 新闻轮播
+            if(Math.random() > 0.997) {
+                const ticker = document.getElementById('ticker');
+                ticker.style.opacity = 0; // 简单淡入淡出效果
+                setTimeout(() => {
+                    ticker.innerText = newsArchive[Math.floor(Math.random() * newsArchive.length)];
+                    ticker.style.opacity = 0.5;
+                }, 500);
+            }
+        }
+
+        async function init() {
+            if (!navigator.gpu) { showError("浏览器不支持 WebGPU"); return; }
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            
+            const canvas = document.getElementById('gpuCanvas');
+            const context = canvas.getContext('webgpu');
+            const format = navigator.gpu.getPreferredCanvasFormat();
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+
+            context.configure({ device, format, alphaMode: 'premultiplied' });
+
+            const uniformBuffer = device.createBuffer({
+                size: 32,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
+            const shaderModule = device.createShaderModule({ code: shaderCode });
+            const pipeline = device.createRenderPipeline({
+                layout: 'auto',
+                vertex: { module: shaderModule, entryPoint: 'vs_main' },
+                fragment: {
+                    module: shaderModule, entryPoint: 'fs_main',
+                    targets: [{ format }]
+                },
+                primitive: { topology: 'triangle-list' },
+            });
+
+            const bindGroup = device.createBindGroup({
+                layout: pipeline.getBindGroupLayout(0),
+                entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+            });
+
+            function render(time) {
+                updateSimulation();
+
+                const uniformData = new Float32Array([
+                    canvas.width, canvas.height, 
+                    time * 0.001,               
+                    data.impact,                     
+                    data.volatility,                 
+                    0, 0, 0                     
+                ]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+
+                const commandEncoder = device.createCommandEncoder();
+                const passEncoder = commandEncoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        clearValue: { r: 0.01, g: 0.02, b: 0.03, a: 1.0 },
+                        loadOp: 'clear', storeOp: 'store',
+                    }],
+                });
+                passEncoder.setPipeline(pipeline);
+                passEncoder.setBindGroup(0, bindGroup);
+                passEncoder.draw(3, 1, 0, 0);
+                passEncoder.end();
+
+                device.queue.submit([commandEncoder.finish()]);
+                requestAnimationFrame(render);
+            }
+
+            requestAnimationFrame(render);
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth * dpr;
+                canvas.height = window.innerHeight * dpr;
+                context.configure({ device, format });
+            });
+        }
+
+        function showError(msg) {
+            document.getElementById('error-overlay').style.display = 'flex';
+            document.getElementById('error-msg').innerText = msg;
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
