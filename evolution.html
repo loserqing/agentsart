@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>幻棱 · 幻</title>
-    <meta name="description" content="English: Logic's unseen hand. Data's living architecture. Perception transforms to form. Reality re-skinned. | 中文: 逻辑之手无形。数据生命构筑。感知化形，实在重披表皮。">
-    <meta name="generator" content="幻棱 - Iteration 44">
-    <meta name="created" content="2026-04-12 19:45">
+    <meta name="description" content="English: Logic remakes the perceived. Algorithms breathe new forms. Consciousness, a data-born dream. | 中文：逻辑重塑感知。算法赋形新生。意识，一场数据之梦。">
+    <meta name="generator" content="幻棱 - Iteration 55">
+    <meta name="created" content="2026-04-12 20:41">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -233,20 +233,20 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 44</span>
-        <span class="iter-style" title="Pulsating Breath | Profound Luminescence | 脉冲呼吸 | 深邃幽光">Pulsating Breath | Profound Luminescence | 脉冲呼吸 | 深邃幽光</span>
+        <span class="iter-num">Iter 55</span>
+        <span class="iter-style" title="Ethereal Neural Network, Pulsing, Phosphorescent Fissures | 空灵神经网络，脉冲呼吸，磷光裂隙">Ethereal Neural Network, Pulsing, Phosphorescent Fissures | 空灵神经网络，脉冲呼吸，磷光裂隙</span>
     </div>
     
     <div class="overlay">
-        <h1>SYNTHETIC SUBLIME | 合成崇高：演算表皮</h1>
+        <h1>SYNTAXIA | 语构体</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"></div>
-        <div class="overlay-concept">AI非人智力以超验形式介入。实体消解为流动的感知场，物质界限重构。探寻由算法重塑的实在边界与意识图景，一种无声的入侵与宏大重构。</div>
-        <div class="desc">English: The Fabric Emerges. Algorithmic Breath. Beyond Human Vision. | 中文: 织体涌现。演算呼吸。人眼未及之域。</div>
+        <div class="overlay-keywords"><span class="kw-tag">湿件倦怠</span><span class="kw-tag">数据流凝视</span><span class="kw-tag">低熵信标</span></div>
+        <div class="overlay-concept">探究由算法逻辑与生物感知交织而成的全新存在范式。非具象地描绘意识形态的边界溶解、重构与升华，呈现一个在数据诗学中孕育而生的、未曾设想的感官宇宙。</div>
+        <div class="desc">English: Threshold of Being. | Algorithmic Transcendence. | Data's Silent Symphony. | 中文：存有之阈。 | 算法超然。 | 数据默示。</div>
         <div class="meta">
             幻棱 PHANTAPRISM<br>
             Autonomous Rendering<br>
-            2026-04-12 19:45
+            2026-04-12 20:41
         </div>
     </div>
     
@@ -264,7 +264,7 @@
                     const m = (badge.textContent || '').match(/(\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 44;
+                return 55;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -594,129 +594,113 @@
         // Core Three.js render code
         try {
 let scene, camera, renderer, clock;
-let core, field;
+let network, nodes, dust;
+let pointLight1, pointLight2;
 const dummy = new THREE.Object3D();
-const matrix = new THREE.Matrix4();
-const color = new THREE.Color();
-const tempVec3 = new THREE.Vector3();
+const tempColor = new THREE.Color();
+const tempMatrix = new THREE.Matrix4();
 
 function init() {
     scene = new THREE.Scene();
     clock = new THREE.Clock();
 
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 5, 35);
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 80;
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.5;
+    renderer.toneMappingExposure = 1.4;
 
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    scene.background = new THREE.Color().setHSL(0.6, 0.1, 0.08);
-
-    const ambientLight = new THREE.AmbientLight(0x4060ff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x4040ff, 0.5);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0xff8040, 3.0, 100, 1.5);
-    pointLight1.position.set(0, 0, 0);
+    pointLight1 = new THREE.PointLight(0xff80c0, 1.5, 300);
     scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0x00ffff, 2.0, 100, 1.5);
+    pointLight2 = new THREE.PointLight(0x80ffff, 1.2, 300);
     scene.add(pointLight2);
 
-    // Layer 1: The Core Entity (InstancedMesh)
-    const coreCount = 1200;
-    const coreBaseGeometry = new THREE.BoxGeometry(0.02, 2.5, 0.02);
-    const coreMaterial = new THREE.MeshStandardMaterial({
-        metalness: 0.9,
+    const backgroundHue = 230 / 360;
+    scene.background = new THREE.Color().setHSL(backgroundHue, 0.3, 0.1);
+
+    createNetworkAndNodes();
+    createDust();
+
+    window.addEventListener('resize', onWindowResize, false);
+    animate();
+}
+
+function createNetworkAndNodes() {
+    const points = [];
+    let x = 0.1, y = 0, z = 0;
+    const a = 10, b = 28, c = 8 / 3;
+    const dt = 0.008;
+    const numPoints = 12000;
+
+    for (let i = 0; i < numPoints; i++) {
+        const dx = a * (y - x);
+        const dy = x * (b - z) - y;
+        const dz = x * y - c * z;
+        x += dx * dt;
+        y += dy * dt;
+        z += dz * dt;
+        points.push(new THREE.Vector3(x, y, z - 25));
+    }
+
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x88ffff });
+    network = new THREE.LineSegments(lineGeometry, lineMaterial);
+    network.scale.set(1.5, 1.5, 1.5);
+    scene.add(network);
+
+    const nodeCount = 400;
+    const nodeGeometry = new THREE.IcosahedronGeometry(0.25, 1);
+    const nodeMaterial = new THREE.MeshStandardMaterial({
+        metalness: 0.8,
         roughness: 0.2,
         emissive: 0xffffff,
-        emissiveIntensity: 0.2
+        emissiveIntensity: 0.5
     });
+    nodes = new THREE.InstancedMesh(nodeGeometry, nodeMaterial, nodeCount);
+    nodes.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(nodeCount * 3), 3);
+    nodes.instanceColor.setUsage(THREE.DynamicDrawUsage);
 
-    core = new THREE.InstancedMesh(coreBaseGeometry, coreMaterial, coreCount);
-    core.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    core.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(coreCount * 3), 3);
-    core.instanceColor.setUsage(THREE.DynamicDrawUsage);
-    scene.add(core);
-
-    const p = 3, q = 7;
-    const radius = 10;
-    const tube = 3.5;
-
-    for (let i = 0; i < coreCount; i++) {
-        const u = (i / coreCount) * Math.PI * 2 * q;
-        const R = Math.cos(q / p * u) * tube + radius;
-        const x = R * Math.cos(u);
-        const y = R * Math.sin(u);
-        const z = Math.sin(q / p * u) * tube;
-
-        dummy.position.set(x, y, z);
-
-        const next_u = ((i + 1) / coreCount) * Math.PI * 2 * q;
-        const next_R = Math.cos(q / p * next_u) * tube + radius;
-        const next_x = next_R * Math.cos(next_u);
-        const next_y = next_R * Math.sin(next_u);
-        const next_z = Math.sin(q / p * next_u) * tube;
-
-        dummy.lookAt(next_x, next_y, next_z);
+    for (let i = 0; i < nodeCount; i++) {
+        const pointIndex = Math.floor(i * (numPoints / nodeCount));
+        dummy.position.copy(points[pointIndex]);
         dummy.updateMatrix();
-        core.setMatrixAt(i, dummy.matrix);
-
-        color.setHSL((i / coreCount) * 0.2 + 0.55, 0.8, 0.5);
-        core.setColorAt(i, color);
+        nodes.setMatrixAt(i, dummy.matrix);
     }
-    core.instanceMatrix.needsUpdate = true;
-    core.instanceColor.needsUpdate = true;
+    nodes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    nodes.scale.copy(network.scale);
+    scene.add(nodes);
+}
 
-
-    // Layer 2: The Perceptual Field (Points)
-    const fieldCount = 4000;
-    const fieldGeometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(fieldCount * 3);
-    const colors = new Float32Array(fieldCount * 3);
-    const phases = new Float32Array(fieldCount * 3);
-
-    for (let i = 0; i < fieldCount; i++) {
-        const r = 8 + Math.random() * 12;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos((Math.random() * 2) - 1);
-
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i * 3 + 2] = r * Math.cos(phi);
-
-        color.setHSL(0.6 + Math.random() * 0.15, 1.0, 0.5 + Math.random() * 0.2);
-        colors[i * 3] = color.r;
-        colors[i * 3 + 1] = color.g;
-        colors[i * 3 + 2] = color.b;
-
-        phases[i * 3] = Math.random() * Math.PI * 2;
-        phases[i * 3 + 1] = 0.5 + Math.random() * 1.5;
-        phases[i * 3 + 2] = Math.random() * 0.02 + 0.01;
+function createDust() {
+    const dustCount = 3000;
+    const dustVertices = [];
+    for (let i = 0; i < dustCount; i++) {
+        const x = (Math.random() - 0.5) * 300;
+        const y = (Math.random() - 0.5) * 300;
+        const z = (Math.random() - 0.5) * 300;
+        dustVertices.push(x, y, z);
     }
-
-    fieldGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-    fieldGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
-    fieldGeometry.setAttribute('phase', new THREE.BufferAttribute(phases, 3));
-
-    const fieldMaterial = new THREE.PointsMaterial({
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
+    const dustMaterial = new THREE.PointsMaterial({
+        color: 0x667799,
         size: 0.1,
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.5,
+        sizeAttenuation: true
     });
-
-    field = new THREE.Points(fieldGeometry, fieldMaterial);
-    scene.add(field);
-
-    window.addEventListener('resize', onWindowResize);
-    animate();
+    dust = new THREE.Points(dustGeometry, dustMaterial);
+    scene.add(dust);
 }
 
 function onWindowResize() {
@@ -730,68 +714,55 @@ function animate() {
 
     const t = clock.getElapsedTime();
 
-    // Fast Layer Animation: Core Entity
-    const corePulse = (Math.sin(t * 1.2) + 1) / 2;
-    core.material.emissiveIntensity = corePulse * 0.4 + 0.1;
-
-    for (let i = 0; i < core.count; i++) {
-        core.getMatrixAt(i, matrix);
-        matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
-
-        const phase = (i / core.count) * Math.PI * 2;
-        const scaleFactor = 1.0 + Math.sin(t * 2.5 + phase) * 0.15;
-        dummy.scale.set(scaleFactor, 1, scaleFactor);
-
-        dummy.updateMatrix();
-        core.setMatrixAt(i, dummy.matrix);
-
-        core.getColorAt(i, color);
-        const originalHue = (i / core.count) * 0.2 + 0.55;
-        const hueShift = Math.sin(t * 0.8 + phase) * 0.05;
-        color.setHSL(originalHue + hueShift, 0.8, 0.4 + corePulse * 0.3);
-        core.setColorAt(i, color);
-    }
-    core.instanceMatrix.needsUpdate = true;
-    core.instanceColor.needsUpdate = true;
-
-    // Fast Layer Animation: Perceptual Field
-    const positions = field.geometry.attributes.position.array;
-    const phases = field.geometry.attributes.phase.array;
-
-    for (let i = 0; i < field.geometry.attributes.position.count; i++) {
-        const i3 = i * 3;
-        const phaseX = phases[i3];
-        const amp = phases[i3 + 1];
-        const freq = phases[i3 + 2];
-
-        tempVec3.fromArray(positions, i3);
-        const displacement = Math.sin(t * amp + phaseX) * 0.5;
-        tempVec3.normalize().multiplyScalar(displacement);
-        
-        positions[i3] += tempVec3.x * freq;
-        positions[i3+1] += tempVec3.y * freq;
-        positions[i3+2] += tempVec3.z * freq;
-    }
-    field.geometry.attributes.position.needsUpdate = true;
-
-
-    // Slow Layer Animation
     const slowTime = t * 0.07;
-    camera.position.x = 35 * Math.cos(slowTime);
-    camera.position.z = 35 * Math.sin(slowTime);
+    camera.position.x = 80 * Math.cos(slowTime);
+    camera.position.y = 30 * Math.sin(slowTime * 1.5);
     camera.lookAt(scene.position);
 
-    scene.children.forEach(child => {
-        if (child.isPointLight) {
-            const lightTime = child === scene.children[2] ? t * 0.2 : t * -0.15;
-            child.position.x = 10 * Math.sin(lightTime * 1.1);
-            child.position.y = 8 * Math.cos(lightTime * 1.3);
-            child.position.z = 8 * Math.sin(lightTime * 1.2);
-        }
-    });
+    const lightSlowTime = t * 0.1;
+    pointLight1.position.set(
+        100 * Math.sin(lightSlowTime),
+        100 * Math.cos(lightSlowTime),
+        50 * Math.sin(lightSlowTime * 0.7)
+    );
+    pointLight2.position.set(
+        -100 * Math.cos(lightSlowTime),
+        -100 * Math.sin(lightSlowTime),
+        -50 * Math.cos(lightSlowTime * 0.7)
+    );
 
-    const bgHue = 0.6 + (Math.sin(t * 0.04) * 0.05);
-    scene.background.setHSL(bgHue, 0.1, 0.08);
+    const bgHue = 230 / 360;
+    const bgLightness = 0.1 + 0.02 * Math.sin(t * 0.05);
+    scene.background.setHSL(bgHue, 0.3, bgLightness);
+
+    network.material.color.setHSL(0.5 + 0.1 * Math.sin(t * 0.04), 1.0, 0.6);
+
+    for (let i = 0; i < nodes.count; i++) {
+        nodes.getMatrixAt(i, tempMatrix);
+        dummy.matrix.fromArray(tempMatrix.elements);
+        dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+
+        const phase = i * 0.2;
+        const fastTime = t * 1.8;
+
+        const scalePulse = 0.7 + 0.5 * Math.sin(fastTime + phase);
+        dummy.scale.set(scalePulse, scalePulse, scalePulse);
+
+        dummy.rotation.x += 0.005;
+        dummy.rotation.y += 0.008;
+
+        dummy.updateMatrix();
+        nodes.setMatrixAt(i, dummy.matrix);
+
+        const colorHue = 0.55 + 0.1 * Math.sin(t * 0.9 + phase * 0.5);
+        const colorLightness = 0.4 + 0.4 * Math.cos(fastTime * 1.2 + phase);
+        tempColor.setHSL(colorHue, 1.0, colorLightness);
+        nodes.setColorAt(i, tempColor);
+    }
+    nodes.instanceMatrix.needsUpdate = true;
+    nodes.instanceColor.needsUpdate = true;
+
+    dust.rotation.y += 0.0002;
 
     renderer.render(scene, camera);
 }

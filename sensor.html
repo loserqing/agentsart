@@ -135,6 +135,48 @@
         /** 采样瞬间脸区青闪反馈（0→1），每帧衰减 */
         let sampleFeedback = 0;
 
+        let _audioCtx = null;
+        function playSampleSound() {
+            if (!_audioCtx) {
+                _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const ctx = _audioCtx;
+            const now = ctx.currentTime;
+
+            const osc1 = ctx.createOscillator();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(680, now);
+            osc1.frequency.exponentialRampToValueAtTime(220, now + 0.5);
+
+            const osc2 = ctx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(340, now + 0.05);
+            osc2.frequency.exponentialRampToValueAtTime(160, now + 0.6);
+
+            const gain1 = ctx.createGain();
+            gain1.gain.setValueAtTime(0.0, now);
+            gain1.gain.linearRampToValueAtTime(0.07, now + 0.06);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+            const gain2 = ctx.createGain();
+            gain2.gain.setValueAtTime(0.0, now + 0.04);
+            gain2.gain.linearRampToValueAtTime(0.05, now + 0.12);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(600, now);
+            filter.Q.setValueAtTime(1.2, now);
+
+            osc1.connect(gain1).connect(filter).connect(ctx.destination);
+            osc2.connect(gain2).connect(filter).connect(ctx.destination);
+
+            osc1.start(now);
+            osc1.stop(now + 0.6);
+            osc2.start(now + 0.04);
+            osc2.stop(now + 0.7);
+        }
+
         /** 轮询服务端状态（badge、关键词闪现等） */
         const STATUS_POLL_MS = 500;
         /** 无人脸持续帧数超过此值则清空服务端/本地截图与人类分析（≈1.5s@60fps / ≈3s@30fps） */
@@ -646,11 +688,11 @@
                     let insideUv = face_interior_winding(p, nF) * uniforms.contour_fade * sb;
                     let tideMul = mix(1.0, 0.28, insideUv);
 
-                    // uniforms.time 为秒级（与 social 一致）；系数缩小以保持原先缓慢漂移感
+                    let tideAwake = mix(0.08, 1.0, clamp(uniforms.presence * 1.8, 0.0, 1.0));
                     let tide = vec2<f32>(
                         sin(uniforms.time * 0.0028 + uv.y * 0.11 + layPhase * 2.1 + layWave.x) * 0.0055,
                         cos(uniforms.time * 0.0022 + uv.x * 0.09 + layPhase * 1.7 + layWave.y) * 0.0042
-                    ) * tideMul;
+                    ) * tideMul * tideAwake;
                     p = p + tide;
 
                     var acc = vec2<f32>(0.0, 0.0);
@@ -736,18 +778,22 @@
                     // —— social.html 同源全屏 fbm（uv / p / t 与 social 片段着色器一致；与 toNdc 线段无关）——
                     var pSoc = (uv - vec2<f32>(0.5)) * 2.0;
                     pSoc.x = pSoc.x * res.x / res.y;
-                    // 与 social.html 默认 data.volatility=0.125 一致；不受脸部 trackedMotion 调制
+                    // presence 驱动：无人时画面极暗极静，有人时觉醒
+                    let awakening = clamp(uniforms.presence * 1.8, 0.0, 1.0);
+                    let dormantDim = mix(0.18, 1.0, awakening);
+                    let dormantFlow = mix(0.15, 1.0, awakening);
+
                     let volBg = 0.125;
-                    let tSoc = uniforms.time * (0.035 + volBg * 0.05);
+                    let tSoc = sin(uniforms.time * 0.008 * dormantFlow) * 5.0;
                     let qSoc = vec2<f32>(fbm(pSoc + vec2<f32>(0.0)), fbm(pSoc + vec2<f32>(1.0)));
                     let rSoc = vec2<f32>(
                         fbm(pSoc + 4.0 * qSoc + vec2<f32>(1.7, 9.2) + tSoc * 0.7),
                         fbm(pSoc + 4.0 * qSoc + vec2<f32>(8.3, 2.8) + tSoc * 0.6)
                     );
                     let fSoc = fbm(pSoc + 4.0 * rSoc);
-                    let socDeep = vec3<f32>(0.01, 0.03, 0.08);
-                    let socMid = vec3<f32>(0.04, 0.10, 0.28);
-                    let socCyan = vec3<f32>(0.0, 0.75, 0.90);
+                    let socDeep = vec3<f32>(0.01, 0.03, 0.08) * dormantDim;
+                    let socMid = vec3<f32>(0.04, 0.10, 0.28) * dormantDim;
+                    let socCyan = vec3<f32>(0.0, 0.75, 0.90) * dormantDim;
                     var colSoc = mix(socDeep, socMid, clamp(length(qSoc), 0.0, 1.0));
                     colSoc = mix(colSoc, socCyan, clamp(pow(fSoc, 2.0) * 1.5, 0.0, 1.0));
                     let scanLn = sin(fragCoord.y * 0.55) * 0.006;
@@ -794,9 +840,9 @@
                     let cnLIn = cnLVis * faceIn;
                     f = f * (1.0 - cnLIn * 0.055) + cnLIn * 0.0025 * sin(tNearStable * 0.95 + cnLIn * 0.35) * mix(0.2, 0.55, faceIn);
 
-                    let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
-                    let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
-                    let cyanBright = vec3<f32>(0.0, 0.75, 0.90);   
+                    let indigoDeep = vec3<f32>(0.01, 0.03, 0.08) * dormantDim;
+                    let indigoMid = vec3<f32>(0.04, 0.10, 0.28) * dormantDim;
+                    let cyanBright = vec3<f32>(0.0, 0.75, 0.90) * dormantDim;   
 
                     var color = mix(indigoDeep, indigoMid, clamp(length(q), 0.0, 1.0));
                     // 调试时勿把 cnT 并进流体底色，否则会整条轮廓带发胀变粗
@@ -856,24 +902,24 @@
                     let calmFac = 1.0 - uniforms.emotion_calm * 0.12 * mix(0.08, 1.0, emoLocal) * emoSb;
                     outRgb = outRgb * mix(1.0, calmFac, faceIn);
 
-                    // 黑纱仅随脸内 winding（faceIn），轮廓邻域 cnLVis 不参与 — 否则 max(..., cnLVis) 会在脸外一圈叠黑晕
-                    let faceShieldRaw = smoothstep(0.06, 0.94, faceIn * 1.12);
-                    let faceShield = pow(faceShieldRaw, 1.14);
-                    let blackVeil = faceShield * mix(0.82, 0.58, faceIn);
+                    let faceShieldRaw = smoothstep(0.04, 0.72, faceIn * 1.15);
+                    let faceShield = pow(faceShieldRaw, 0.9);
+                    let blackVeil = faceShield * 0.96;
                     outRgb = mix(outRgb, vec3<f32>(0.0, 0.0, 0.0), blackVeil);
 
-                    // 情绪与暖色叠在黑纱之后，脸内/轮廓邻域才看得见变化
                     let emFaceTint = clamp(faceIn * 0.98, 0.0, 1.0) * emoSb;
-                    let emW = mix(0.12, 0.92, emoLocal);
-                    outRgb = outRgb + vec3<f32>(0.07, 0.025, -0.02) * uniforms.emotion_joy * emFaceTint * emW;
-                    outRgb = outRgb + vec3<f32>(-0.02, 0.005, 0.07) * uniforms.emotion_tension * emFaceTint * emW;
-                    outRgb = outRgb + vec3<f32>(0.055, 0.055, 0.06) * uniforms.emotion_surprise * emFaceTint * emW;
-                    outRgb = outRgb + warmTint * faceIn * (0.17 + areaBoost * 0.07) * emoSb;
+                    let emW = mix(0.15, 0.85, emoLocal);
+                    outRgb = outRgb + vec3<f32>(0.06, 0.02, -0.015) * uniforms.emotion_joy * emFaceTint * emW;
+                    outRgb = outRgb + vec3<f32>(-0.015, 0.005, 0.06) * uniforms.emotion_tension * emFaceTint * emW;
+                    outRgb = outRgb + vec3<f32>(0.045, 0.045, 0.055) * uniforms.emotion_surprise * emFaceTint * emW;
+                    outRgb = outRgb + warmTint * faceIn * (0.14 + areaBoost * 0.06) * emoSb;
 
                     let sfb = clamp(uniforms.sample_feedback, 0.0, 1.0);
                     if (sfb > 0.001) {
-                        outRgb += vec3<f32>(0.02, 0.36, 0.44) * faceIn * sfb;
-                        outRgb += vec3<f32>(0.05, 0.42, 0.48) * faceIn * sfb * 0.55;
+                        let sfbSoft = sfb * sfb * sfb;
+                        outRgb += vec3<f32>(0.03, 0.06, 0.08) * sfbSoft;
+                        outRgb += vec3<f32>(0.04, 0.28, 0.35) * cnT * sfb * 1.2;
+                        outRgb += vec3<f32>(0.02, 0.14, 0.18) * faceIn * sfb * 0.3;
                     }
 
                     return vec4<f32>(outRgb, 1.0);
@@ -1102,6 +1148,7 @@
 
             faceSampleInFlight = true;
             sampleFeedback = 1;
+            try { playSampleSound(); } catch(_) {}
             if (reason === 'ok-gesture' || reason === 'face-replaced') resetFaceSampleStreaks();
             const now = Date.now();
             lastFaceUploadAt = now;
@@ -1311,7 +1358,8 @@
             lastTime = time;
             const dtSeconds = Math.max(0.001, Math.min(0.05, deltaTime * 0.001));
 
-            sampleFeedback = Math.max(0, sampleFeedback - deltaTime * 0.00115);
+            sampleFeedback = sampleFeedback * Math.pow(0.96, deltaTime * 0.06);
+            if (sampleFeedback < 0.005) sampleFeedback = 0;
 
             const canvas = document.getElementById('gpuCanvas');
             updateTracking(dtSeconds);

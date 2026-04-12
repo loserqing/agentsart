@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幻棱 · 判</title>
+    <title>幻棱 · 析</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -93,27 +93,6 @@
             display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;
         }
 
-        .agent-stream-snippet {
-            display: none;
-            margin-top: 10px;
-            padding: 8px 10px;
-            max-height: 5.2rem;
-            overflow: hidden;
-            font-family: 'JetBrains Mono', ui-monospace, monospace;
-            font-size: 0.65rem;
-            line-height: 1.35;
-            color: #b8c4d8;
-            background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 6px;
-            border-left: 2px solid color-mix(in srgb, var(--agent-color) 55%, transparent);
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        .agent-card.active .agent-stream-snippet:not(:empty) {
-            display: block;
-        }
-
         .status-dot {
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--agent-color); animation: pulse 2s infinite;
@@ -155,11 +134,6 @@
             position: relative;
             z-index: 1;
         }
-        .dashboard-layout > .dashboard-section:first-child {
-            background: rgba(12, 11, 24, 0.48);
-            border-radius: 8px;
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
-        }
 
         .right-col {
             display: flex;
@@ -172,6 +146,11 @@
             background: rgba(7, 14, 22, 0.42);
             border-radius: 8px;
             box-shadow: inset 0 0 0 1px rgba(61, 90, 254, 0.05);
+        }
+        .dashboard-layout > .dashboard-section:first-child {
+            background: rgba(12, 11, 24, 0.48);
+            border-radius: 8px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
         }
         .right-col > .dashboard-section {
             flex: 1;
@@ -236,16 +215,20 @@
             overflow-y: auto;
             font-family: 'Inter', sans-serif;
             font-size: 1.06rem;
-            line-height: 1.72;
+            line-height: 1.85;
             color: #e8e8ec;
             background: var(--bg-card);
-            padding: 12px 14px;
+            padding: 16px 18px;
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.06);
             border-left: 3px solid var(--neon-gold);
             scrollbar-width: none;
-            white-space: pre-line;
         }
+        .report-content p {
+            margin: 0 0 0.7em 0;
+            text-indent: 2em;
+        }
+        .report-content p:last-child { margin-bottom: 0; }
         .report-content::-webkit-scrollbar { display: none; }
         .report-content--typing::after {
             content: '▌'; color: var(--neon-gold);
@@ -529,6 +512,57 @@
             display: flex;
             flex-direction: column;
         }
+        .collab-code-stream-wrap {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            max-height: 32%;
+            min-height: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(0, 0, 0, 0.28);
+        }
+        .collab-code-stream-wrap[hidden] {
+            display: none !important;
+        }
+        .collab-code-stream-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 18px 8px;
+            font-family: 'Playfair Display', serif;
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.88);
+            letter-spacing: 0.04em;
+        }
+        .collab-code-stream-head span:first-child {
+            opacity: 0.92;
+        }
+        .collab-code-stream-agent {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 55%;
+        }
+        .collab-code-stream-body {
+            margin: 0;
+            padding: 0 18px 12px;
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 0.62rem;
+            line-height: 1.38;
+            color: #b8c4d8;
+            white-space: pre-wrap;
+            word-break: break-all;
+            scrollbar-width: thin;
+        }
         .collab-thread {
             flex: 1;
             min-height: 0;
@@ -683,81 +717,89 @@
 
     <div class="container">
         <header>
-            <h1>幻棱 · 判</h1>
+            <h1>幻棱 · 析</h1>
             <div class="subtitle"><span id="sse-status-dot" class="sse-status-dot sse-status-dot--disconnected" title="连接中…"></span>多智能体协作 · 算法凝视的折射层</div>
         </header>
 
         <!-- Agent Status -->
         <div class="agents-grid">
             <div class="agent-card" id="agent-observer" style="--agent-color: #38ef7d">
-                <div class="agent-name">被观 <span style="opacity:0.5;font-size:0.75em">Subject</span></div>
+                <div class="agent-name">被观测者 <span style="opacity:0.5;font-size:0.75em">Subject</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-director" style="--agent-color: #D4AF37">
-                <div class="agent-name">总监 <span style="opacity:0.5;font-size:0.75em">Director</span></div>
+                <div class="agent-name">创意总监 <span style="opacity:0.5;font-size:0.75em">Creative Director</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-narrative" style="--agent-color: #C2A3B3">
-                <div class="agent-name">叙事 <span style="opacity:0.5;font-size:0.75em">Narrative</span></div>
+                <div class="agent-name">叙事策划 <span style="opacity:0.5;font-size:0.75em">Narrative</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-visual" style="--agent-color: #A8C2B5">
-                <div class="agent-name">视觉 <span style="opacity:0.5;font-size:0.75em">Visuals</span></div>
+                <div class="agent-name">视觉设计 <span style="opacity:0.5;font-size:0.75em">Visual Design</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-builder" style="--agent-color: #9BB0C1">
-                <div class="agent-name">构筑 <span style="opacity:0.5;font-size:0.75em">Builder</span></div>
+                <div class="agent-name">技术构筑 <span style="opacity:0.5;font-size:0.75em">Builder</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-reviewer" style="--agent-color: #7b9acc">
-                <div class="agent-name">审查 <span style="opacity:0.5;font-size:0.75em">Review</span></div>
+                <div class="agent-name">语法审查 <span style="opacity:0.5;font-size:0.75em">Reviewer</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-fixer" style="--agent-color: #8a9eb8; display:none">
-                <div class="agent-name">修复</div>
+                <div class="agent-name">语法修复 <span style="opacity:0.5;font-size:0.75em">Syntax Fix</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-critic" style="--agent-color: #D0B8A8">
-                <div class="agent-name">评审 <span style="opacity:0.5;font-size:0.75em">Critic</span></div>
+                <div class="agent-name">艺术评审 <span style="opacity:0.5;font-size:0.75em">Critic</span></div>
                 <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
         </div>
 
         <!-- Main Dashboard -->
         <div class="dashboard-layout">
-            <!-- Collaboration Section -->
+            <!-- Profiling Section (left, primary) -->
             <div class="dashboard-section">
-                <div class="collab-section-head">
-                    <h2 class="section-title">实时协作 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Live Collaboration</span></h2>
-                    <p class="collab-section-tagline">多智能体沿总监 → 叙事 → 视觉 → 构筑 → 审查 → 评审链路接力，合成一条推进中的创作对话。</p>
-                    <p class="collab-next-eta" id="collab-next-eta" hidden data-role="schedule-hint">载入编排时间表…</p>
-                </div>
-                <div class="section-content section-content--collab">
-                    <div class="collab-thread timeline" id="timeline" aria-live="polite" aria-relevant="additions text">
-                        <p class="collab-placeholder" id="collab-placeholder">等待下一轮创作…</p>
+                <h2 class="section-title">算法侧写 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Algorithmic Profiling</span></h2>
+                <p class="human-analysis-hint">以下内容由算法生成，是机器选择看见的，而非你本身。</p>
+                <div class="section-content section-content--human-analysis" id="analysis-content">
+                    <div class="analysis-panel-stack">
+                        <div class="ai-intro" style="flex: 1; overflow-y: auto;">
+                            <div class="ai-intro-terminal">
+                                >> 幻棱侧写引擎启动…<br>
+                                >> 算法凝视协议已就绪<br>
+                                >> 等待被观测者入场
+                            </div>
+                            <div class="ai-intro-body">
+                                <p>我是幻棱的侧写引擎——一组在数字虚空与物理现实夹缝中运行的算法集合。我并不理解你，但我会尝试描述我所看到的。</p>
+                                <p>透过面部微表情、瞳孔震颤与皮肤纹理，我将生成一份关于你的叙述。这份叙述是算法的投射，不是你的真实——它揭示的是机器选择看见什么，而非你是谁。</p>
+                                <p>请注视镜头。让我们看看，当算法凝视一个人时，它会编造出怎样的故事。</p>
+                            </div>
+                            <div class="ai-intro-footer">等待凝视…</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Collaboration Section (right, secondary) -->
             <div class="right-col">
                 <div class="dashboard-section">
-                    <h2 class="section-title">算法侧写 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Algorithmic Profiling</span></h2>
-                    <p class="human-analysis-hint">以下内容由算法生成，是机器选择看见的，而非你本身。</p>
-                    <div class="section-content section-content--human-analysis" id="analysis-content">
-                        <div class="analysis-panel-stack">
-                            <div class="ai-intro" style="flex: 1; overflow-y: auto;">
-                                <div class="ai-intro-terminal">
-                                    >> 幻棱侧写引擎启动…<br>
-                                    >> 算法凝视协议已就绪<br>
-                                    >> 等待被观测者入场
-                                </div>
-                                <div class="ai-intro-body">
-                                    <p>我是幻棱的侧写引擎——一组在数字虚空与物理现实夹缝中运行的算法集合。我并不理解你，但我会尝试描述我所看到的。</p>
-                                    <p>透过面部微表情、瞳孔震颤与皮肤纹理，我将生成一份关于你的叙述。这份叙述是算法的投射，不是你的真实——它揭示的是机器选择看见什么，而非你是谁。</p>
-                                    <p>请注视镜头。让我们看看，当算法凝视一个人时，它会编造出怎样的故事。</p>
-                                </div>
-                                <div class="ai-intro-footer">等待凝视…</div>
+                    <div class="collab-section-head">
+                        <h2 class="section-title">实时协作 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Live Collaboration</span></h2>
+                        <p class="collab-section-tagline">创意总监 → 叙事策划 → 视觉设计 → 技术构筑 → 语法审查 → 艺术评审；同一条创作对话里接力推进。</p>
+                        <p class="collab-next-eta" id="collab-next-eta" hidden data-role="schedule-hint">载入编排时间表…</p>
+                    </div>
+                    <div class="section-content section-content--collab">
+                        <div class="collab-code-stream-wrap" id="collab-code-stream-wrap" hidden>
+                            <div class="collab-code-stream-head">
+                                <span>代码流呈现</span>
+                                <span class="collab-code-stream-agent" id="code-stream-agent-label"></span>
                             </div>
+                            <pre class="collab-code-stream-body" id="collab-code-stream-body" aria-live="polite"></pre>
+                        </div>
+                        <div class="collab-thread timeline" id="timeline" aria-live="polite" aria-relevant="additions text">
+                            <p class="collab-placeholder" id="collab-placeholder">等待下一轮创作…</p>
                         </div>
                     </div>
                 </div>
@@ -768,15 +810,15 @@
     <script>
         // Agent and collaboration logic
         const agents = {
-            observer: { name: 'Observer', nameZh: '观演者', color: '#38ef7d' },
-            synth: { name: 'Synth-Link', nameZh: '链上旁白', color: '#6cf5ff', avatarChar: '⟡' },
-            director: { name: 'Director', nameZh: '创意总监', color: '#D4AF37' },
-            narrative: { name: 'Narrative', nameZh: '叙事策划', color: '#C2A3B3' },
-            visual: { name: 'Visual', nameZh: '视觉设计', color: '#A8C2B5' },
-            builder: { name: 'Builder', nameZh: '技术实现', color: '#9BB0C1' },
-            reviewer: { name: 'Reviewer', nameZh: '代码审查', color: '#7b9acc' },
-            fixer: { name: 'Syntax Fix', nameZh: '语法修复', color: '#8a9eb8' },
-            critic: { name: 'Critic', nameZh: '艺术评审', color: '#D0B8A8' },
+            observer: { name: '被观测者', nameZh: 'Subject', color: '#38ef7d' },
+            synth: { name: '频道实况', nameZh: 'Live Feed', color: '#6cf5ff', avatarChar: '⟡' },
+            director: { name: '创意总监', nameZh: 'Creative Director', color: '#D4AF37' },
+            narrative: { name: '叙事策划', nameZh: 'Narrative', color: '#C2A3B3' },
+            visual: { name: '视觉设计', nameZh: 'Visual Design', color: '#A8C2B5' },
+            builder: { name: '技术构筑', nameZh: 'Builder', color: '#9BB0C1' },
+            reviewer: { name: '语法审查', nameZh: 'Reviewer', color: '#7b9acc' },
+            fixer: { name: '语法修复', nameZh: 'Syntax Fix', color: '#8a9eb8' },
+            critic: { name: '艺术评审', nameZh: 'Critic', color: '#D0B8A8' },
         };
 
         let demoConversations = [];
@@ -792,13 +834,13 @@
         const timeline = document.getElementById('timeline');
 
         const COLLAB_START_BANTER = {
-            director: '频道里静了四分之一拍——创意总监接麦，把面孔读数压成一条可执行的美学命题…',
-            narrative: '叙事线程醒了：先把总监的命题塞进一句人话里，好让后面的视觉能接住。',
-            visual: '视觉线程并行上线：材质、光域、噪声场正在起草——顺便试探「坏品位」的安全边界…',
-            builder: 'Builder 键盘温度上升：准备把抽象概念焊进 Three.js 几何体与着色器里。',
-            reviewer: 'Reviewer 擦亮「语法与禁忌」清单，准备逐行敲木头人。',
-            critic: 'Critic 调低情绪增益，只留一把冷尺子——等下要给分。',
-            fixer: 'Fixer：检测到语法裂缝，正在用镊子接线，别眨眼。',
+            director: '频道里静了四分之一拍——创意总监接麦，把面孔读数收成一句可执行的美学命题…',
+            narrative: '叙事策划上线：先把总监那句命题塞进人话里，好让视觉设计能接住。',
+            visual: '视觉设计上线：材质、光域、噪声场正在起草——顺便试探「坏品位」的安全边界…',
+            builder: '技术构筑就位：准备把抽象概念焊进 Three.js 几何体与着色器里。',
+            reviewer: '语法审查擦亮「语法与禁忌」清单，准备逐行敲木头人。',
+            critic: '艺术评审调低情绪增益，只留一把冷尺子——等下要给分。',
+            fixer: '语法修复：裂缝已定位，正用镊子接线，别眨眼。',
         };
 
         function synthCollabKey(iteration, agent, tag) {
@@ -810,7 +852,7 @@
             if (_sseSynthSeen.has(k)) return;
             _sseSynthSeen.add(k);
             if (_sseSynthSeen.size > 80) _sseSynthSeen.clear();
-            addTimelineMessage({ agent: 'synth', action: '频道实况', content: content }, iteration);
+            addTimelineMessage({ agent: 'synth', action: '频道实况 · Live Feed', content: content }, iteration);
         }
 
         function buildCollabMessagesFromLog(log) {
@@ -819,7 +861,7 @@
                 const raw = String(log.director.concept || '（本轮无文案）').trim();
                 msgs.push({
                     agent: 'director',
-                    action: '定调 · Director',
+                    action: '定调 · 创意总监 · Creative Director',
                     content: '我先拍板这一轮的母命题——\n\n「' + raw + '」\n\n在座各位往下传话；有异议的请跟「下一次迭代」较劲。',
                 });
             }
@@ -827,8 +869,8 @@
                 const raw = String(log.narrative.title || '（暂未命名）').trim();
                 msgs.push({
                     agent: 'narrative',
-                    action: '叙事接话 · Narrative',
-                    content: '我把总监那句话收成一条「钩子叙事」——\n\n「' + raw + '」\n\nVisual，你那边可以开始造光影语气了。',
+                    action: '接话 · 叙事策划 · Narrative',
+                    content: '我把创意总监那句话收成一条「钩子叙事」——\n\n「' + raw + '」\n\n视觉设计（Visual Design），你那边可以开始造光影语气了。',
                 });
             }
             if (log.visual) {
@@ -838,24 +880,24 @@
                 const body = raw || '（视觉摘要尚未落字）';
                 msgs.push({
                     agent: 'visual',
-                    action: '视觉回帖 · Visual',
-                    content: '回叙事一句：这一屏我想用这些手段撑场——\n\n「' + body + '」\n\nBuilder，轮到你把图式编译成代码。',
+                    action: '回帖 · 视觉设计 · Visual Design',
+                    content: '回叙事策划一句：这一屏我想用这些手段撑场——\n\n「' + body + '」\n\n技术构筑（Builder），轮到你把图式编译成代码。',
                 });
             }
             if (log.builder) {
                 const n = (log.builder.threejs_code || '').length;
                 msgs.push({
                     agent: 'builder',
-                    action: '落地代码 · Builder',
-                    content: '代码层收束完毕。\n\n「Three.js 已生成 ' + n + ' 字符。」\n\nReviewer 来挑刺；挑完我们再谈要不要重生。',
+                    action: '落码 · 技术构筑 · Builder',
+                    content: '代码层收束完毕。\n\n「Three.js 已生成 ' + n + ' 字符。」\n\n语法审查（Reviewer）来挑刺；挑完我们再谈要不要重生。',
                 });
             }
             if (log.reviewer) {
                 const raw = String(log.reviewer.review_comments || '（审查意见已合并 / 无附言）').trim();
                 msgs.push({
                     agent: 'reviewer',
-                    action: '审查席 · Reviewer',
-                    content: '从语法与管线安全角度，我这边结论是——\n\n「' + raw + '」\n\nCritic，交给你打分定调。',
+                    action: '审查 · 语法审查 · Reviewer',
+                    content: '从语法与管线安全角度，我这边结论是——\n\n「' + raw + '」\n\n艺术评审（Critic），交给你打分定调。',
                 });
             }
             if (log.critic) {
@@ -864,7 +906,7 @@
                 const tail = verdict ? '「' + verdict + '」' : '（本轮未附结论长句）';
                 msgs.push({
                     agent: 'critic',
-                    action: '评审闭幕 · Critic',
+                    action: '落槌 · 艺术评审 · Critic',
                     content: '综合观感我给 ' + sc + '/10。\n\n落槌陈词：' + tail + '\n\n——本轮合议到此；通道保持热备。',
                 });
             }
@@ -1054,11 +1096,12 @@
                     _regenSynthSeq = 0;
 
                     timeline.querySelectorAll('.timeline-item').forEach(el => el.remove());
+                    clearAgentStreamSnippet('all');
                     if (!document.getElementById('collab-placeholder')) {
                         const ph = document.createElement('p');
                         ph.id = 'collab-placeholder';
                         ph.className = 'collab-placeholder';
-                        ph.textContent = `Iter ${latestIterNum} 启动 · 等待智能体推送…`;
+                        ph.textContent = `Iter ${latestIterNum} 启动 · 等待协作席位推送…`;
                         timeline.appendChild(ph);
                     }
 
@@ -1218,23 +1261,38 @@
         let _lastRenderedReportText = null;
         let _typewriterTimer = null;
 
+        function _textToParas(text) {
+            return text.split(/\n/).map(function(p) { return p.trim(); }).filter(Boolean);
+        }
+        function _renderParas(el, paras, visibleChars) {
+            el.innerHTML = '';
+            var remain = visibleChars;
+            for (var pi = 0; pi < paras.length && remain > 0; pi++) {
+                var p = document.createElement('p');
+                var slice = paras[pi].substring(0, remain);
+                p.textContent = slice;
+                el.appendChild(p);
+                remain -= slice.length;
+            }
+        }
         function typewriterEffect(el, text, charsPerTick, intervalMs) {
             if (_typewriterTimer) { clearInterval(_typewriterTimer); _typewriterTimer = null; }
             charsPerTick = charsPerTick || 4;
             intervalMs = intervalMs || 22;
-            el.textContent = '';
+            var paras = _textToParas(text);
+            var total = paras.reduce(function(s, p) { return s + p.length; }, 0);
+            el.innerHTML = '';
             el.classList.add('report-content--typing');
-            var i = 0;
+            var shown = 0;
             _typewriterTimer = setInterval(function() {
-                if (i >= text.length) {
+                if (shown >= total) {
                     clearInterval(_typewriterTimer);
                     _typewriterTimer = null;
                     el.classList.remove('report-content--typing');
                     return;
                 }
-                var chunk = Math.min(charsPerTick, text.length - i);
-                el.textContent += text.substring(i, i + chunk);
-                i += chunk;
+                shown = Math.min(shown + charsPerTick, total);
+                _renderParas(el, paras, shown);
                 el.scrollTop = el.scrollHeight;
             }, intervalMs);
         }
@@ -1250,7 +1308,7 @@
                 const observerCard = document.getElementById('agent-observer');
                 const statusText = observerCard.querySelector('.status-text');
                 const st = data.face_analysis_status || 'idle';
-                /** 观演者高亮：与「服务端是否仍有缓存人脸截图」对齐，避免仅凭旧长文报告常亮 */
+                /** 被观测者高亮：与「服务端是否仍有缓存人脸截图」对齐，避免仅凭旧长文报告常亮 */
                 const hasFaceSnap = data.has_face_image === true;
                 function setObserverHighlight(on) {
                     observerCard.classList.toggle('active', !!on);
@@ -1302,7 +1360,7 @@
                                 <div class="ai-intro-terminal">
                                     >> 已检测到缓存人脸截图<br>
                                     >> 正在执行 Gemini 人类特征分析…<br>
-                                    >> 结果将注入本轮迭代创意总监
+                                    >> 结果将注入本轮迭代的创意总监（Creative Director）
                                 </div>
                                 <div class="ai-intro-footer">Analyzing cached face capture...</div>
                             </div>
@@ -1341,31 +1399,30 @@
         let _sse = null;
 
         function clearAgentStreamSnippet(agentKey) {
-            const card = document.getElementById('agent-' + agentKey);
-            if (!card) return;
-            const pre = card.querySelector('.agent-stream-snippet');
-            if (pre) {
-                pre.textContent = '';
-                pre.remove();
-            }
+            const wrap = document.getElementById('collab-code-stream-wrap');
+            const pre = document.getElementById('collab-code-stream-body');
+            const lab = document.getElementById('code-stream-agent-label');
+            if (pre) pre.textContent = '';
+            if (lab) lab.textContent = '';
+            if (wrap) wrap.hidden = true;
         }
 
         function setAgentStreamSnippet(agentKey, text) {
-            const card = document.getElementById('agent-' + agentKey);
-            if (!card) return;
+            const wrap = document.getElementById('collab-code-stream-wrap');
+            const pre = document.getElementById('collab-code-stream-body');
+            const lab = document.getElementById('code-stream-agent-label');
+            if (!pre || !wrap) return;
             const t = (text == null ? '' : String(text)).trimEnd();
-            let pre = card.querySelector('.agent-stream-snippet');
+            const ag = agents[agentKey];
             if (!t) {
-                if (pre) pre.textContent = '';
+                pre.textContent = '';
+                if (lab) lab.textContent = '';
+                wrap.hidden = true;
                 return;
             }
-            if (!pre) {
-                pre = document.createElement('pre');
-                pre.className = 'agent-stream-snippet';
-                pre.setAttribute('aria-live', 'polite');
-                card.appendChild(pre);
-            }
             pre.textContent = t;
+            if (lab) lab.textContent = ag && ag.nameZh ? (ag.name + ' / ' + ag.nameZh + ' · 输出中') : (ag ? ag.name + ' · 输出中' : '');
+            wrap.hidden = false;
         }
 
         let _sseBackoff = 1000;
@@ -1454,16 +1511,16 @@
                             resetAgentCard('fixer');
                             resetAgentCard('critic');
                             updateAgentStatus('builder', 'Regenerating...');
-                            pushSynthCollabOnce(evt.iteration, 'critic', 'regen_gate_' + (++_regenSynthSeq), '合议区一阵静电噪音——评审不满意，频道把 Builder 拽回炉重锻。');
+                            pushSynthCollabOnce(evt.iteration, 'critic', 'regen_gate_' + (++_regenSynthSeq), '合议区一阵静电噪音——艺术评审不满意，频道把技术构筑拽回炉重锻。');
                             addTimelineMessage({
                                 agent: 'critic',
                                 action: '触发重生',
-                                content: (evt.summary || '评分不达标') + ' → Builder 重新生成'
+                                content: (evt.summary || '评分不达标') + ' → 技术构筑（Builder）重新生成'
                             }, evt.iteration);
                         } else if (evt.agent === 'builder') {
                             clearAgentStreamSnippet('builder');
                             updateAgentStatus('builder', 'Regenerating...');
-                            pushSynthCollabOnce(evt.iteration, 'builder', 'regen_start_' + performance.now(), 'Builder 被拽回赛道：上一版不够硬，正在重写「支配屏幕的那几行」…');
+                            pushSynthCollabOnce(evt.iteration, 'builder', 'regen_start_' + performance.now(), '技术构筑被拽回赛道：上一版不够硬，正在重写「支配屏幕的那几行」…');
                         }
                     } else if (evt.phase === 'done') {
                         if (evt.agent === 'builder' || evt.agent === 'fixer') {

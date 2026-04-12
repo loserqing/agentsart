@@ -1,14 +1,13 @@
-# 幻棱 Phantaprism 🎭
+# 幻棱 Phantaprism
 
-> **AI-Driven Generative Art System** — Facial analysis powered iterative creation, exploring the aesthetic boundary between carbon observers and silicon algorithms
+> **AI-Driven Generative Art Installation** — Facial analysis powered iterative creation, exploring the aesthetic boundary between carbon observers and silicon algorithms
 >
-> **AI 驱动的生成艺术系统** — 通过面部分析驱动迭代创作，探索碳基观测者与硅基算法的美学边界
+> **AI 驱动的生成艺术装置** — 通过面部分析驱动迭代创作，探索碳基观测者与硅基算法的美学边界
 >
 > 幻 — AI 生成的抽象幻象 | 棱 — 多面折射，层层转化
 
 <div align="center">
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com)
 [![Gemini AI](https://img.shields.io/badge/Gemini-AI-4285F4.svg)](https://ai.google.dev)
@@ -18,50 +17,71 @@
 
 ---
 
-## 🌌 Overview / 项目简介
+## Overview / 项目简介
 
-**幻棱 (Phantaprism)** is a cyberpunk-styled AI generative art system. It captures human faces through cameras, uses **Gemini AI** for deep facial analysis, then drives a multi-agent workflow to generate iterative abstract artworks — like a prism refracting human essence into algorithmic phantoms.
+**幻棱 (Phantaprism)** is a cyberpunk-styled AI generative art installation presented as a three-screen triptych. It captures human faces through cameras, uses **Gemini AI** for deep facial analysis, then drives a multi-agent workflow to generate iterative abstract artworks — like a prism refracting human essence into algorithmic phantoms.
 
-**幻棱** 是一个赛博朋克风格的 AI 生成艺术系统。它通过摄像头捕捉人脸，使用 **Gemini AI** 进行深度面部分析，然后驱动多智能体工作流生成迭代抽象艺术作品——如同棱镜将人类本质折射为算法幻象。
+**幻棱** 是一件赛博朋克风格的 AI 生成艺术装置，以三屏联展形式呈现。它通过摄像头捕捉人脸，使用 **Gemini AI** 进行深度面部分析，然后驱动多智能体工作流生成迭代抽象艺术作品——如同棱镜将人类本质折射为算法幻象。
+
+### Three Screens / 三屏联展
+
+| Screen | Name | Role |
+|--------|------|------|
+| **镜** Mirror | `sensor.html` | WebGPU shader visualization of face contours in real-time / 实时 WebGPU 面部轮廓可视化 |
+| **判** Judgment | `dashboard.html` | Multi-agent orchestration panel with AI profiling / 多智能体编排面板与 AI 侧写 |
+| **衍** Derivation | `evolution.html` | Full-screen generated abstract artwork / 全屏生成的抽象艺术作品 |
 
 ### Core Features / 核心特性
 
-- 🎯 **Real-time Face Capture** / 实时面部捕捉 - MediaPipe full-body pose tracking (face, hands, iris) / MediaPipe 全身姿态追踪（面部、手部、虹膜）
-- 🧠 **AI Profiling Engine** / AI 侧写引擎 - Gemini-powered "Sherlock-style" facial micro-feature deconstruction / Gemini 驱动的「福尔摩斯式」面部微特征解构
-- 🤖 **Multi-Agent Orchestration** / 多智能体编排 - LangGraph StateGraph agent collaboration for iterative art generation / LangGraph StateGraph 智能体协作生成艺术迭代
-- 🎨 **Iterative Evolution** / 迭代进化 - Each analysis drives the next artistic creation / 每次分析驱动下一次艺术创作
-- 📊 **Visual Dashboard** / 可视化仪表盘 - Real-time analysis results and generation history / 实时查看分析结果与生成历史
+- **Real-time Face Capture** / 实时面部捕捉 — MediaPipe face + hand tracking, OK gesture trigger / MediaPipe 面部+手部追踪，OK 手势触发
+- **AI Profiling Engine** / AI 侧写引擎 — Gemini-powered "Sherlock-style" facial micro-feature deconstruction / Gemini 驱动的「福尔摩斯式」面部微特征解构
+- **Multi-Agent Orchestration** / 多智能体编排 — 6-agent LangGraph pipeline (Director → Narrative → Visual → Builder → Reviewer → Critic) / 6 智能体 LangGraph 流水线
+- **WebGPU Shader** / WebGPU 着色器 — Full-screen WGSL fragment shader with contour flow field and FBM domain warping / 全屏 WGSL 着色器，轮廓流场与 FBM 域扭曲
+- **Iterative Evolution** / 迭代进化 — Each face analysis drives unique abstract artwork generation / 每次面部分析驱动独特的抽象艺术生成
 
 ---
 
-## 🏗️ System Architecture / 系统架构
+## System Architecture / 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   幻棱 Phantaprism System                       │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │   Frontend  │───▶│  FastAPI     │───▶│   Gemini AI   │  │
-│  │  (HTML/JS)  │    │   Backend    │    │   Analysis    │  │
-│  └─────────────┘    └──────────────┘    └───────────────┘  │
-│         │                  │                      │          │
-│         ▼                  ▼                      ▼          │
-│  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │ MediaPipe   │    │  LangGraph   │    │  Iteration    │  │
-│  │ Vision      │    │  StateGraph  │    │  Storage      │  │
-│  └─────────────┘    └──────────────┘    └───────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                    幻棱 Phantaprism System                      │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  Camera ──▶ MediaPipe (browser) ──▶ Face Preheat (Gemini)     │
+│               │                         │                      │
+│          OK gesture /              Background                  │
+│          auto-trigger              analysis                    │
+│               │                         │                      │
+│               ▼                         ▼                      │
+│  ┌──────────────────┐    ┌─────────────────────────────┐      │
+│  │  sensor.html 镜   │    │  dashboard.html 判           │      │
+│  │  WebGPU shader   │    │  SSE live updates           │      │
+│  │  face contours   │    │  agent cards + profiling    │      │
+│  └──────────────────┘    └─────────────────────────────┘      │
+│                                    │                           │
+│                          LangGraph 6-agent                     │
+│                          orchestration                         │
+│                                    │                           │
+│                                    ▼                           │
+│                          ┌─────────────────────┐              │
+│                          │  evolution.html 衍    │              │
+│                          │  Three.js artwork    │              │
+│                          │  auto-refresh        │              │
+│                          └─────────────────────┘              │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start / 快速开始
+## Quick Start / 快速开始
 
 ### Requirements / 环境要求
 
 - Python 3.11+
-- Node.js 18+ (optional, for frontend development) / 可选，用于前端开发
+- Node.js 18+ (optional, for Three.js syntax validation)
 - Camera device / 摄像头设备
+- WebGPU-capable browser (Chrome 113+) for sensor page
 
 ### Installation / 安装
 
@@ -73,7 +93,6 @@ cd agentsart
 # Create virtual environment / 创建虚拟环境
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# .venv\Scripts\Activate.ps1  # Windows
 
 # Install dependencies / 安装依赖
 pip install -r requirements.txt
@@ -86,7 +105,7 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # Edit .env file and fill in your API keys / 编辑 .env 文件，填入你的 API 密钥
-# - GEMINI_API_KEY: Google Gemini API Key / Google Gemini API 密钥
+# Required: GEMINI_API_KEY
 ```
 
 ### Run / 运行
@@ -95,174 +114,109 @@ cp .env.example .env
 # Start server / 启动服务
 python main.py
 
-# Access application / 访问应用
-# Main Interface: http://localhost:8000 / 主界面
-# Sensor Page: http://localhost:8000/sensor.html / 传感器页面
-# Dashboard: http://localhost:8000/dashboard.html / 仪表盘
-# Evolution History: http://localhost:8000/evolution.html / 进化历史
+# Access application (default port 8080) / 访问应用（默认端口 8080）
+# Hub:        http://localhost:8080
+# Sensor 镜:  http://localhost:8080/sensor.html
+# Dashboard 判: http://localhost:8080/dashboard.html
+# Evolution 衍: http://localhost:8080/evolution.html
 ```
 
 ---
 
-## 📁 Project Structure / 项目结构
+## Project Structure / 项目结构
 
 ```
-agentsart/
-├── main.py                     # FastAPI main entry / FastAPI 主入口
-├── prompts.py                  # AI analysis prompt templates / AI 分析 Prompt 模板
-├── requirements.txt            # Python dependencies / Python 依赖
-├── .env.example                # Environment variable template / 环境变量模板
-├── index.html                  # Main interface / 主界面
-├── sensor.html                 # Camera capture page / 摄像头捕捉页面
-├── dashboard.html              # Analysis result dashboard / 分析结果仪表盘
-├── evolution.html              # Iteration history display / 迭代历史展示
-├── iterations/                 # Generated artworks storage / 生成的艺术作品存储
+phantaprism/
+├── main.py                     # FastAPI server, state, SSE, face preheat
+├── prompts.py                  # Gemini face analysis prompt (Chinese)
+├── requirements.txt            # Python dependencies
+├── .env.example                # Environment variable template
+├── index.html                  # Navigation hub / 导航中枢
+├── sensor.html                 # 镜 — WebGPU shader + MediaPipe capture
+├── dashboard.html              # 判 — Agent orchestration + profiling
+├── evolution.html              # 衍 — Generated artwork display
+├── iterations/                 # Generated artworks storage
 ├── assets/
-│   └── mediapipe-tasks/        # MediaPipe model files / MediaPipe 模型文件
+│   └── mediapipe-tasks/        # MediaPipe WASM + model files
+│       └── models/             # face_landmarker.task, hand_landmarker.task
 ├── js/
-│   ├── vision_capture.js       # Vision capture logic / 视觉捕捉逻辑
-│   └── api_handler.js          # API call wrapper / API 调用封装
-└── workflow/
-    ├── orchestrator_full.py    # Multi-agent orchestrator / 多智能体编排器
-    └── evolution_template.html # Evolution history template / 进化历史模板
+│   ├── vision_capture.js       # MediaPipe integration (face + hand)
+│   ├── api_handler.js          # API call wrapper
+│   └── lib/three.min.js        # Three.js r160 UMD bundle
+├── workflow/
+│   ├── orchestrator_full.py    # 6-agent LangGraph orchestrator
+│   └── evolution_template.html # HTML template for generated artworks
+└── docs/
+    ├── exhibition_statement.md # Exhibition wall text
+    └── artist_statement.md     # Artist statement
 ```
 
 ---
 
-## 🎭 Core Modules / 核心模块
+## Core Modules / 核心模块
 
-### 1. Facial Analysis Engine (`prompts.py`) / 面部分析引擎
+### 1. Facial Analysis Engine / 面部分析引擎 (`prompts.py`)
 
-Uses Gemini AI for "Sherlock-style" facial profiling / 使用 Gemini AI 进行「福尔摩斯式」面部侧写:
+Gemini AI "Sherlock-style" facial profiling / Gemini AI「福尔摩斯式」面部侧写:
 
-- **Hardware Specification Audit** / 硬件规格审计 - Age perception, gender presentation, complexion rough judgment / 年龄感、性别呈现、气色粗判
-- **Neural Circuit Profiling** / 神经回路侧写 - Micro-expressions, temperament tendency / 微表情、气质倾向
-- **Aesthetic Entropy** / 美学熵值 - Makeup, lighting, composition taste / 妆发、光线、构图品味
-- **Social Protocol** / 社会协议 - Rough class/role association / 阶层/角色联想
-- **Real-time Emotion Cache** / 实时情绪缓存 - Current emotional state reading / 当下情绪状态读取
+- **Hardware Specification Audit** / 硬件规格审计 — Age, gender presentation, complexion
+- **Neural Circuit Profiling** / 神经回路侧写 — Micro-expressions, temperament
+- **Aesthetic Entropy** / 美学熵值 — Makeup, lighting, composition taste
+- **Social Protocol** / 社会协议 — Class/role association
+- **Real-time Emotion Cache** / 实时情绪缓存 — Current emotional state
 
-### 2. Multi-Agent Orchestrator (`workflow/orchestrator_full.py`) / 多智能体编排器
+### 2. Multi-Agent Orchestrator / 多智能体编排器 (`workflow/orchestrator_full.py`)
 
-**LangGraph StateGraph** based agent collaboration system / 基于 LangGraph StateGraph 的智能体协作系统:
+6-agent **LangGraph StateGraph** pipeline:
 
-- **State Management** / 状态管理 - TypedDict defines iteration state / TypedDict 定义迭代状态
-- **Node Orchestration** / 节点编排 - START → Analysis → Generation → Rendering → END / START → 分析 → 生成 → 渲染 → END
-- **Conditional Branching** / 条件分支 - Dynamically adjust generation strategy based on analysis results / 根据分析结果动态调整生成策略
-- **Code Generation** / 代码生成 - Output Three.js (WebGL) generative art code / 输出 Three.js (WebGL) 生成艺术代码
+| Agent | Role |
+|-------|------|
+| **Director** 总监 | Creative direction from face analysis |
+| **Narrative** 叙事 | Story/concept development (parallel with Visual) |
+| **Visual Designer** 视觉 | Color palette, composition design (parallel with Narrative) |
+| **Builder** 构筑 | Three.js code generation |
+| **Reviewer** 审查 | Syntax validation + code fixing |
+| **Critic** 评审 | Quality scoring, can trigger Builder regen |
 
-### 3. Vision Capture (`js/vision_capture.js`) / 视觉捕捉
+### 3. WebGPU Sensor Shader / WebGPU 传感器着色器 (`sensor.html`)
 
-MediaPipe full-body pose tracking / MediaPipe 全身姿态追踪:
-
-- Face Landmark / 面部地标
-- Hand Landmark / 手部地标
-- Iris Tracking / 虹膜追踪
-- Pose Detection / 全身姿态
-
----
-
-## 📊 API Reference / API 接口
-
-### `POST /api/analyze`
-
-Analyze uploaded face image / 分析上传的人脸图像
-
-**Request / 请求:**
-```json
-{
-  "image": "data:image/jpeg;base64,..."
-}
-```
-
-**Response / 响应:**
-```json
-{
-  "subject_present": true,
-  "summary": "AI profiling text...",
-  "director_influence": "Director influence description",
-  "creative_keywords": ["cyberpunk", "neon", "chrome"],
-  "metrics": {
-    "aesthetic_entropy": 64,
-    "cyborgization_pct": 38,
-    "ai_survival_pct": 45
-  }
-}
-```
-
-### `GET /api/iterations`
-
-Get all iteration history / 获取所有迭代历史
-
-### `POST /api/generate`
-
-Trigger new art generation iteration / 触发新的艺术生成迭代
+Full-screen WGSL fragment shader:
+- Contour-based flow field from MediaPipe face landmarks
+- FBM domain warping with bounded cyclic time
+- Face interior rendered as transparent black
+- Real-time motion/emotion uniform mapping
 
 ---
 
-## 🎨 Gallery / 作品展示
+## API Reference / API 接口
 
-After running the system, visit these pages to view generated results / 运行系统后，访问以下页面查看生成结果:
-
-| Page / 页面 | URL | Description / 描述 |
-|------|-----|------|
-| Main Interface / 主界面 | `/` | System entry point / 系统入口 |
-| Sensor / 传感器 | `/sensor.html` | Real-time camera capture / 实时摄像头捕捉 |
-| Dashboard / 仪表盘 | `/dashboard.html` | AI analysis result visualization / AI 分析结果可视化 |
-| Evolution History / 进化史 | `/evolution.html` | Iterative artwork timeline / 迭代作品时间线 |
-
----
-
-## 🔧 Development / 开发
-
-### Debug Mode / 调试模式
-
-```bash
-# Enable verbose logging / 启用详细日志
-export DEBUG=true
-python main.py
-```
-
-### Testing / 测试
-
-```bash
-# Run test suite / 运行测试套件
-pytest tests/
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/analyze` | Full face analysis pipeline |
+| `POST` | `/analyze_face_preview` | Background face analysis → dashboard preview |
+| `POST` | `/api/generate` | Trigger new art generation iteration |
+| `POST` | `/clear_presence` | Clear face state when person leaves |
+| `GET` | `/get_data` | State snapshot (face, agents, ETA) |
+| `GET` | `/api/iterations` | List all iteration history |
+| `GET` | `/events` | SSE stream for agent progress |
+| `GET` | `/health` | Service health check |
 
 ---
 
-## 📝 Changelog / 更新日志
+## Acknowledgments / 致谢
 
-- **2026-03-28** - Initial public release / 初始公开版本
-  - Gemini AI facial analysis / Gemini AI 面部分析
-  - LangGraph multi-agent orchestration / LangGraph 多智能体编排
-  - MediaPipe vision capture / MediaPipe 视觉捕捉
-  - FastAPI backend service / FastAPI 后端服务
-
----
-
-## 📄 License / 许可证
-
-MIT License - See [LICENSE](LICENSE) for details / 详见 [LICENSE](LICENSE)
-
----
-
-## 🙏 Acknowledgments / 致谢
-
-- [Google Gemini AI](https://ai.google.dev) - AI analysis engine / AI 分析引擎
-- [MediaPipe](https://mediapipe.dev) - Vision tracking / 视觉追踪
-- [LangGraph](https://langchain-ai.github.io/langgraph) - Agent orchestration / 智能体编排
-- [LangChain](https://python.langchain.com) - LLM application framework / LLM 应用框架
-- [FastAPI](https://fastapi.tiangolo.com) - Web framework / Web 框架
+- [Google Gemini AI](https://ai.google.dev) — AI analysis engine
+- [MediaPipe](https://mediapipe.dev) — Vision tracking
+- [LangGraph](https://langchain-ai.github.io/langgraph) — Agent orchestration
+- [Three.js](https://threejs.org) — WebGL rendering
+- [FastAPI](https://fastapi.tiangolo.com) — Web framework
 
 ---
 
 <div align="center">
 
-**幻棱 HuanLeng** — Exploring the aesthetic boundary between carbon and silicon 🌌
+**幻棱 Phantaprism** — 探索碳基与硅基的美学边界
 
-**幻棱** — 探索碳基与硅基的美学边界 🌌
-
-*Built with 🖤 by @loserqing*
+*Built by @loserqing*
 
 </div>
