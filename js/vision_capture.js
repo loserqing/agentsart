@@ -5,10 +5,47 @@
 import {
     FaceLandmarker,
     PoseLandmarker,
+    HandLandmarker,
     FilesetResolver,
 } from '../assets/mediapipe-tasks/vision_bundle.mjs';
 
 const DETECT_INTERVAL_MS = 33; // ~30 fps
+const HAND_DETECT_INTERVAL_MS = 66; // 手势只为触发，降到 ~15fps 节省算力
+
+/**
+ * MediaPipe HandLandmarker 21 点：0 腕，4/8/12/16/20 为拇/食/中/无名/小指尖，
+ * 5/9/13/17 为各指根 MCP，6/10/14/18 为 PIP。
+ * OK 手势判据：
+ *   1) 拇指尖 ↔ 食指尖 距离 < 手宽的 0.18（捏合成圈）
+ *   2) 中/无名/小指尖 y < 其 PIP y（指头伸直向上，图像坐标 y 向下）
+ *   3) 不是完全握拳 —— 三指尖到腕的距离大于指根到腕距离的 1.05
+ */
+function classifyHandGesture(hand) {
+    if (!hand || hand.length < 21) return null;
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const wrist = hand[0];
+    const indexMcp = hand[5];
+    const pinkyMcp = hand[17];
+    const handWidth = dist(indexMcp, pinkyMcp);
+    if (handWidth < 1e-4) return null;
+
+    const thumbTip = hand[4];
+    const indexTip = hand[8];
+    const pinch = dist(thumbTip, indexTip) / handWidth;
+    if (pinch > 0.55) return null;
+
+    const middleExtended = hand[12].y < hand[10].y - 0.01;
+    const ringExtended = hand[16].y < hand[14].y - 0.01;
+    const pinkyExtended = hand[20].y < hand[18].y - 0.01;
+    const extendedCount = [middleExtended, ringExtended, pinkyExtended].filter(Boolean).length;
+    if (extendedCount < 2) return null;
+
+    const midTipToWrist = dist(hand[12], wrist);
+    const midMcpToWrist = dist(hand[9], wrist);
+    if (midTipToWrist < midMcpToWrist * 1.05) return null;
+
+    return 'ok';
+}
 
 export class VisionSystem {
     constructor(videoElement, sharedData) {
@@ -18,7 +55,9 @@ export class VisionSystem {
         this.captureCtx = this.captureCanvas.getContext('2d', { willReadFrequently: true });
         this._faceLandmarker = null;
         this._poseLandmarker = null;
+        this._handLandmarker = null;
         this._lastDetectTime = 0;
+        this._lastHandDetectTime = 0;
         this._rafId = null;
     }
 
@@ -51,6 +90,23 @@ export class VisionSystem {
             minPoseDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
         });
+
+            try {
+            this._handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: './assets/mediapipe-tasks/models/hand_landmarker.task',
+                    delegate: 'GPU',
+                },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                minHandDetectionConfidence: 0.6,
+                minHandPresenceConfidence: 0.6,
+                minTrackingConfidence: 0.5,
+            });
+        } catch (e) {
+            console.warn('[VisionSystem] HandLandmarker init failed, gesture trigger disabled:', e);
+            this._handLandmarker = null;
+        }
 
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { width: 640, height: 480 },
@@ -107,6 +163,28 @@ export class VisionSystem {
                 this.sharedData.faceArea = Math.abs(face[10].y - face[152].y);
             } else {
                 this.sharedData.faceArea = 0;
+            }
+
+            if (this._handLandmarker && now - this._lastHandDetectTime >= HAND_DETECT_INTERVAL_MS) {
+                this._lastHandDetectTime = now;
+                const handResult = this._handLandmarker.detectForVideo(this.video, ts);
+                const list = handResult.landmarks && handResult.landmarks.length > 0
+                    ? handResult.landmarks
+                    : null;
+                let gesture = null;
+                let primaryHand = null;
+                if (list) {
+                    for (const h of list) {
+                        if (classifyHandGesture(h) === 'ok') {
+                            gesture = 'ok';
+                            primaryHand = h;
+                            break;
+                        }
+                    }
+                    if (!primaryHand) primaryHand = list[0];
+                }
+                this.sharedData.hand = primaryHand;
+                this.sharedData.handGesture = gesture;
             }
         };
         this._rafId = requestAnimationFrame(tick);

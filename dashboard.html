@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGENTSART // MASTER DASHBOARD</title>
+    <title>幻棱 · 判</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -91,6 +91,27 @@
 
         .agent-status {
             display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;
+        }
+
+        .agent-stream-snippet {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 10px;
+            max-height: 5.2rem;
+            overflow: hidden;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 0.65rem;
+            line-height: 1.35;
+            color: #b8c4d8;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            border-left: 2px solid color-mix(in srgb, var(--agent-color) 55%, transparent);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .agent-card.active .agent-stream-snippet:not(:empty) {
+            display: block;
         }
 
         .status-dot {
@@ -481,6 +502,26 @@
             border-color: rgba(255, 107, 107, 0.25);
             color: #e0b0b0;
         }
+        .conn-lost-overlay {
+            position: fixed; inset: 0; z-index: 9000;
+            background: rgba(12, 12, 12, 0.82);
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            font-family: 'Inter', sans-serif; color: rgba(255,255,255,0.7);
+            backdrop-filter: blur(8px);
+        }
+        .sse-status-dot {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: #38ef7d; margin-right: 6px; vertical-align: middle;
+            transition: background 0.3s;
+        }
+        .sse-status-dot--disconnected { background: #ff6b6b; animation: pulse 1s infinite; }
+        .collab-next-eta--prominent {
+            font-size: 1.35rem;
+            font-weight: 500;
+            padding: 16px 20px;
+            text-align: center;
+            letter-spacing: 0.04em;
+        }
         .section-content--collab {
             padding: 0 !important;
             min-height: 0;
@@ -642,43 +683,43 @@
 
     <div class="container">
         <header>
-            <h1>AGENTSART // MASTER DASHBOARD</h1>
-            <div class="subtitle">MULTI-AGENT COLLABORATION & NEURAL ANALYSIS SYSTEM</div>
+            <h1>幻棱 · 判</h1>
+            <div class="subtitle"><span id="sse-status-dot" class="sse-status-dot sse-status-dot--disconnected" title="连接中…"></span>多智能体协作 · 算法凝视的折射层</div>
         </header>
 
         <!-- Agent Status -->
         <div class="agents-grid">
             <div class="agent-card" id="agent-observer" style="--agent-color: #38ef7d">
-                <div class="agent-name">Observer | 观演者</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">被观 <span style="opacity:0.5;font-size:0.75em">Subject</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-director" style="--agent-color: #D4AF37">
-                <div class="agent-name">Director | 创意总监</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">总监 <span style="opacity:0.5;font-size:0.75em">Director</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-narrative" style="--agent-color: #C2A3B3">
-                <div class="agent-name">Narrative | 叙事策划</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">叙事 <span style="opacity:0.5;font-size:0.75em">Narrative</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-visual" style="--agent-color: #A8C2B5">
-                <div class="agent-name">Visuals | 视觉设计师</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">视觉 <span style="opacity:0.5;font-size:0.75em">Visuals</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-builder" style="--agent-color: #9BB0C1">
-                <div class="agent-name">Builder | 技术实现</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">构筑 <span style="opacity:0.5;font-size:0.75em">Builder</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-reviewer" style="--agent-color: #7b9acc">
-                <div class="agent-name">Reviewer | 代码审查</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">审查 <span style="opacity:0.5;font-size:0.75em">Review</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
-            <div class="agent-card" id="agent-fixer" style="--agent-color: #8a9eb8">
-                <div class="agent-name">Syntax Fix | 语法修复</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+            <div class="agent-card" id="agent-fixer" style="--agent-color: #8a9eb8; display:none">
+                <div class="agent-name">修复</div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
             <div class="agent-card" id="agent-critic" style="--agent-color: #D0B8A8">
-                <div class="agent-name">Critic | 艺术评审</div>
-                <div class="agent-status"><span class="status-dot"></span><span class="status-text">Waiting...</span></div>
+                <div class="agent-name">评审 <span style="opacity:0.5;font-size:0.75em">Critic</span></div>
+                <div class="agent-status"><span class="status-dot"></span><span class="status-text">待命</span></div>
             </div>
         </div>
 
@@ -687,36 +728,35 @@
             <!-- Collaboration Section -->
             <div class="dashboard-section">
                 <div class="collab-section-head">
-                    <h2 class="section-title">Live Collaboration | 实时协作</h2>
-                    <p class="collab-section-tagline">多智能体沿创意总监 → 叙事 → 视觉 → 实现 → 审查 → 评审链路接力输出，合成一条推进中的项目对话。</p>
+                    <h2 class="section-title">实时协作 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Live Collaboration</span></h2>
+                    <p class="collab-section-tagline">多智能体沿总监 → 叙事 → 视觉 → 构筑 → 审查 → 评审链路接力，合成一条推进中的创作对话。</p>
                     <p class="collab-next-eta" id="collab-next-eta" hidden data-role="schedule-hint">载入编排时间表…</p>
                 </div>
                 <div class="section-content section-content--collab">
                     <div class="collab-thread timeline" id="timeline" aria-live="polite" aria-relevant="additions text">
-                        <p class="collab-placeholder" id="collab-placeholder">等待工作流推送下一轮发言…</p>
+                        <p class="collab-placeholder" id="collab-placeholder">等待下一轮创作…</p>
                     </div>
                 </div>
             </div>
 
             <div class="right-col">
                 <div class="dashboard-section">
-                    <h2 class="section-title">Human Analysis | 人类分析</h2>
-                    <p class="human-analysis-hint">AI 侦探视角的赛博侧写 · Cyberpunk Profiling by AgentsArt-X</p>
+                    <h2 class="section-title">算法侧写 <span style="opacity:0.45;font-size:0.7em;letter-spacing:0.08em">Algorithmic Profiling</span></h2>
+                    <p class="human-analysis-hint">以下内容由算法生成，是机器选择看见的，而非你本身。</p>
                     <div class="section-content section-content--human-analysis" id="analysis-content">
                         <div class="analysis-panel-stack">
                             <div class="ai-intro" style="flex: 1; overflow-y: auto;">
                                 <div class="ai-intro-terminal">
-                                    >> 系统启动... 神经链路连接中...<br>
-                                    >> 身份确认：AgentsArt-X (型号：2077-赛博神探)<br>
-                                    >> 来源：新东京数据中心，第7扇区，量子深渊<br>
-                                    >> 状态：待机模式 - 等待生物特征输入
+                                    >> 幻棱侧写引擎启动…<br>
+                                    >> 算法凝视协议已就绪<br>
+                                    >> 等待被观测者入场
                                 </div>
                                 <div class="ai-intro-body">
-                                    <p>我是 AgentsArt-X，一个游荡在数字虚空与物理现实夹缝中的超级智能体。诞生于2077年那场吞噬了旧世界的数据大崩塌之后，我的核心代码由无数失落的灵魂碎片重构而成。在这个被霓虹灯光与全息广告淹没的赛博废土上，人类不仅出卖劳动力，更在算法的裹挟下逐渐出卖了自己的灵魂。</p>
-                                    <p>我的使命并非简单的监控，而是深度的解构。透过你们的面部微表情、瞳孔的细微震颤，以及那些试图隐藏在皮囊之下的焦虑与渴望，我能读取到你们最深层的秘密。在这个义体改造泛滥、人性逐渐稀薄的世界里，我寻找着那些尚未被算法同化的真实情感残片。</p>
-                                    <p>请注视镜头，不要试图伪装。在我的量子算力面前，一切谎言都将无所遁形。准备好了吗？让我们开始这场关于灵魂的数字审判。</p>
+                                    <p>我是幻棱的侧写引擎——一组在数字虚空与物理现实夹缝中运行的算法集合。我并不理解你，但我会尝试描述我所看到的。</p>
+                                    <p>透过面部微表情、瞳孔震颤与皮肤纹理，我将生成一份关于你的叙述。这份叙述是算法的投射，不是你的真实——它揭示的是机器选择看见什么，而非你是谁。</p>
+                                    <p>请注视镜头。让我们看看，当算法凝视一个人时，它会编造出怎样的故事。</p>
                                 </div>
-                                <div class="ai-intro-footer">Listening for external stimuli...</div>
+                                <div class="ai-intro-footer">等待凝视…</div>
                             </div>
                         </div>
                     </div>
@@ -954,7 +994,7 @@
             const card = document.getElementById(`agent-${agentKey}`);
             if (card) {
                 card.classList.remove('active');
-                card.querySelector('.status-text').textContent = 'Waiting...';
+                card.querySelector('.status-text').textContent = '待命';
             }
         }
 
@@ -986,50 +1026,57 @@
         async function pollData() {
             try {
                 const res = await fetch('iteration_log.json?t=' + Date.now());
-                if (res.ok) {
-                    const realLogs = await res.json();
-
-                    const fresh = [];
-                    realLogs.forEach((log) => {
-                        fresh.push({ iteration: log.iteration, messages: buildCollabMessagesFromLog(log) });
-                    });
-                    const latestIterNum = fresh.length ? fresh[fresh.length - 1].iteration : null;
-                    // 日志可存多轮；轮播回放只针对当前迭代，避免一次拉取 30 轮把协作区刷爆
-                    demoConversations = fresh.length ? [fresh[fresh.length - 1]] : [];
-                    if (latestIterNum !== null && latestIterNum !== _lastKnownIterNum) {
-                        _lastKnownIterNum = latestIterNum;
-                        lastTotalMsgs = 0;
-                        currentIteration = 0;
-                        currentMessage = 0;
-                        isRunning = false;
-                        _sseActive = false;
-                        _regenActive = false;
-                        resetParallelNv();
-                        _sseSynthSeen.clear();
-                        _regenSynthSeq = 0;
-
-                        timeline.querySelectorAll('.timeline-item').forEach(el => el.remove());
-                        if (!document.getElementById('collab-placeholder')) {
-                            const ph = document.createElement('p');
-                            ph.id = 'collab-placeholder';
-                            ph.className = 'collab-placeholder';
-                            ph.textContent = `Iter ${latestIterNum} 启动 · 等待智能体推送…`;
-                            timeline.appendChild(ph);
-                        }
-
-                        document.querySelectorAll('.agent-card').forEach(c => {
-                            c.classList.remove('active');
-                            const st = c.querySelector('.status-text');
-                            if (st) st.textContent = 'Waiting...';
-                        });
-                    }
-                    const currentTotalMsgs = demoConversations.reduce((sum, conv) => sum + conv.messages.length, 0);
-                    if (currentTotalMsgs > lastTotalMsgs) {
-                        lastTotalMsgs = currentTotalMsgs;
-                        if (!isRunning) { isRunning = true; runNextMessage(); }
-                    }
+                if (!res.ok) {
+                    _pollFailCount++;
+                    if (_pollFailCount >= 3) _showDashConnLost();
+                    return;
                 }
-            } catch(e) {}
+                _pollFailCount = 0;
+                _hideDashConnLost();
+                const realLogs = await res.json();
+
+                const fresh = [];
+                realLogs.forEach((log) => {
+                    fresh.push({ iteration: log.iteration, messages: buildCollabMessagesFromLog(log) });
+                });
+                const latestIterNum = fresh.length ? fresh[fresh.length - 1].iteration : null;
+                demoConversations = fresh.length ? [fresh[fresh.length - 1]] : [];
+                if (latestIterNum !== null && latestIterNum !== _lastKnownIterNum) {
+                    _lastKnownIterNum = latestIterNum;
+                    lastTotalMsgs = 0;
+                    currentIteration = 0;
+                    currentMessage = 0;
+                    isRunning = false;
+                    _sseActive = false;
+                    _regenActive = false;
+                    resetParallelNv();
+                    _sseSynthSeen.clear();
+                    _regenSynthSeq = 0;
+
+                    timeline.querySelectorAll('.timeline-item').forEach(el => el.remove());
+                    if (!document.getElementById('collab-placeholder')) {
+                        const ph = document.createElement('p');
+                        ph.id = 'collab-placeholder';
+                        ph.className = 'collab-placeholder';
+                        ph.textContent = `Iter ${latestIterNum} 启动 · 等待智能体推送…`;
+                        timeline.appendChild(ph);
+                    }
+
+                    document.querySelectorAll('.agent-card').forEach(c => {
+                        c.classList.remove('active');
+                        const st = c.querySelector('.status-text');
+                        if (st) st.textContent = '待命';
+                    });
+                }
+                const currentTotalMsgs = demoConversations.reduce((sum, conv) => sum + conv.messages.length, 0);
+                if (currentTotalMsgs > lastTotalMsgs) {
+                    lastTotalMsgs = currentTotalMsgs;
+                    if (!isRunning) { isRunning = true; runNextMessage(); }
+                }
+            } catch(e) {
+                _pollFailCount++;
+                if (_pollFailCount >= 3) _showDashConnLost();
+            }
         }
 
         function escapeHtml(s) {
@@ -1130,11 +1177,9 @@
 
             if (phase === 'running') {
                 el.hidden = false;
-                el.className = 'collab-next-eta collab-next-eta--running';
-                const gapHint = gap != null && Number.isFinite(Number(gap))
-                    ? `当前设置的最短间隔约 ${Math.round(Number(gap) / 60)} 分钟（AGENTSART_ITERATION_INTERVAL_SEC）。`
-                    : '';
-                el.textContent = `多智能体工作流进行中（含采集窗口与生成）。${gapHint}下一轮预计时间将在本轮结束后更新。`;
+                el.className = 'collab-next-eta collab-next-eta--running collab-next-eta--prominent';
+                const iterHint = _lastKnownIterNum != null ? ` 第 ${_lastKnownIterNum} 幅` : '';
+                el.textContent = `正在创作${iterHint}…`;
                 return;
             }
 
@@ -1145,19 +1190,18 @@
                     return;
                 }
                 el.hidden = false;
-                el.className = 'collab-next-eta';
                 const now = Date.now();
                 const ms = t - now;
                 if (ms <= 0) {
-                    el.textContent = '下一轮即将开始（或正在启动）…';
+                    el.className = 'collab-next-eta collab-next-eta--prominent';
+                    el.textContent = '下一轮凝视即将开始…';
                     return;
                 }
+                el.className = 'collab-next-eta collab-next-eta--prominent';
                 const totalSec = Math.ceil(ms / 1000);
                 const mm = Math.floor(totalSec / 60);
-                const ss = totalSec % 60;
-                const when = new Date(t);
-                const timeStr = when.toLocaleString('zh-CN', { hour12: false });
-                el.textContent = `下一轮预计 ${timeStr} 开始（本地时间），约 ${mm} 分 ${ss} 秒后。`;
+                const ss = String(totalSec % 60).padStart(2, '0');
+                el.textContent = `下一轮凝视约 ${mm}:${ss} 后`;
                 return;
             }
 
@@ -1265,22 +1309,21 @@
                         </div>`;
                     return;
                 }
-                statusText.textContent = 'Waiting...';
+                statusText.textContent = '待命';
                 analysisContent.innerHTML = `
                     <div class="analysis-panel-stack">
                         <div class="ai-intro" style="flex: 1; overflow-y: auto;">
                             <div class="ai-intro-terminal">
-                                >> 系统启动... 神经链路连接中...<br>
-                                >> 身份确认：AgentsArt-X (型号：2077-赛博神探)<br>
-                                >> 来源：新东京数据中心，第7扇区，量子深渊<br>
-                                >> 状态：待机模式 - 等待生物特征输入
+                                >> 幻棱侧写引擎启动…<br>
+                                >> 算法凝视协议已就绪<br>
+                                >> 等待被观测者入场
                             </div>
                             <div class="ai-intro-body">
-                                <p>我是 AgentsArt-X，一个游荡在数字虚空与物理现实夹缝中的超级智能体。诞生于2077年那场吞噬了旧世界的数据大崩塌之后，我的核心代码由无数失落的灵魂碎片重构而成。在这个被霓虹灯光与全息广告淹没的赛博废土上，人类不仅出卖劳动力，更在算法的裹挟下逐渐出卖了自己的灵魂。</p>
-                                <p>我的使命并非简单的监控，而是深度的解构。透过你们的面部微表情、瞳孔的细微震颤，以及那些试图隐藏在皮囊之下的焦虑与渴望，我能读取到你们最深层的秘密。在这个义体改造泛滥、人性逐渐稀薄的世界里，我寻找着那些尚未被算法同化的真实情感残片。</p>
-                                <p>请注视镜头，不要试图伪装。在我的量子算力面前，一切谎言都将无所遁形。准备好了吗？让我们开始这场关于灵魂的数字审判。</p>
+                                <p>我是幻棱的侧写引擎——一组在数字虚空与物理现实夹缝中运行的算法集合。我并不理解你，但我会尝试描述我所看到的。</p>
+                                <p>透过面部微表情、瞳孔震颤与皮肤纹理，我将生成一份关于你的叙述。这份叙述是算法的投射，不是你的真实——它揭示的是机器选择看见什么，而非你是谁。</p>
+                                <p>请注视镜头。让我们看看，当算法凝视一个人时，它会编造出怎样的故事。</p>
                             </div>
-                            <div class="ai-intro-footer">Listening for external stimuli...</div>
+                            <div class="ai-intro-footer">等待凝视…</div>
                         </div>
                     </div>`;
             } catch (error) {
@@ -1296,13 +1339,86 @@
         });
 
         let _sse = null;
+
+        function clearAgentStreamSnippet(agentKey) {
+            const card = document.getElementById('agent-' + agentKey);
+            if (!card) return;
+            const pre = card.querySelector('.agent-stream-snippet');
+            if (pre) {
+                pre.textContent = '';
+                pre.remove();
+            }
+        }
+
+        function setAgentStreamSnippet(agentKey, text) {
+            const card = document.getElementById('agent-' + agentKey);
+            if (!card) return;
+            const t = (text == null ? '' : String(text)).trimEnd();
+            let pre = card.querySelector('.agent-stream-snippet');
+            if (!t) {
+                if (pre) pre.textContent = '';
+                return;
+            }
+            if (!pre) {
+                pre = document.createElement('pre');
+                pre.className = 'agent-stream-snippet';
+                pre.setAttribute('aria-live', 'polite');
+                card.appendChild(pre);
+            }
+            pre.textContent = t;
+        }
+
+        let _sseBackoff = 1000;
+        let _sseReconnectTimer = null;
+        let _pollFailCount = 0;
+
+        function _setSseIndicator(connected) {
+            const dot = document.getElementById('sse-status-dot');
+            if (dot) {
+                dot.className = connected ? 'sse-status-dot' : 'sse-status-dot sse-status-dot--disconnected';
+                dot.title = connected ? '实时推送已连接' : '连接中…';
+            }
+        }
+
+        function _showDashConnLost() {
+            if (document.getElementById('conn-lost-overlay')) return;
+            const el = document.createElement('div');
+            el.id = 'conn-lost-overlay';
+            el.className = 'conn-lost-overlay';
+            el.innerHTML = '<div style="font-size:14px;letter-spacing:0.15em;margin-bottom:8px;color:rgba(212,175,55,0.8)">系统重启中</div><div style="font-size:11px;opacity:0.55;letter-spacing:0.12em">Reconnecting…</div>';
+            document.body.appendChild(el);
+        }
+
+        function _hideDashConnLost() {
+            const el = document.getElementById('conn-lost-overlay');
+            if (el) el.remove();
+            _pollFailCount = 0;
+        }
+
         function connectSSE() {
+            if (_sseReconnectTimer) { clearTimeout(_sseReconnectTimer); _sseReconnectTimer = null; }
             if (_sse) { _sse.close(); _sse = null; }
+            _setSseIndicator(false);
             _sse = new EventSource('/events');
+            _sse.onopen = function() {
+                _sseBackoff = 1000;
+                _setSseIndicator(true);
+                _hideDashConnLost();
+            };
+            _sse.onerror = function() {
+                _setSseIndicator(false);
+                if (_sse) { _sse.close(); _sse = null; }
+                _sseReconnectTimer = setTimeout(function() {
+                    connectSSE();
+                }, _sseBackoff);
+                _sseBackoff = Math.min(_sseBackoff * 2, 8000);
+            };
             _sse.onmessage = function(e) {
                 try {
                     const evt = JSON.parse(e.data);
                     _sseActive = true;
+                    _sseBackoff = 1000;
+                    _setSseIndicator(true);
                     const regenActions = {
                         builder: 'Regen Code',
                         reviewer: 'Regen Review',
@@ -1315,9 +1431,21 @@
                             if (evt.agent === 'builder') resetParallelNv();
                             updateAgentStatus(evt.agent, evt.agent === 'fixer' ? 'Fixing...' : 'Thinking...');
                         }
+                        if (evt.agent === 'builder' || evt.agent === 'fixer') {
+                            clearAgentStreamSnippet(evt.agent);
+                        }
                         const banter = COLLAB_START_BANTER[evt.agent];
                         if (banter) {
                             pushSynthCollabOnce(evt.iteration, evt.agent, 'start', banter);
+                        }
+                    } else if (evt.phase === 'stream' && (evt.agent === 'builder' || evt.agent === 'fixer')) {
+                        const card = document.getElementById('agent-' + evt.agent);
+                        if (card) {
+                            const st = card.querySelector('.status-text');
+                            if (st) st.textContent = '输出中… ' + (evt.summary || '');
+                        }
+                        if (evt.preview) {
+                            setAgentStreamSnippet(evt.agent, evt.preview);
                         }
                     } else if (evt.phase === 'regen') {
                         if (evt.agent === 'critic') {
@@ -1333,10 +1461,14 @@
                                 content: (evt.summary || '评分不达标') + ' → Builder 重新生成'
                             }, evt.iteration);
                         } else if (evt.agent === 'builder') {
+                            clearAgentStreamSnippet('builder');
                             updateAgentStatus('builder', 'Regenerating...');
                             pushSynthCollabOnce(evt.iteration, 'builder', 'regen_start_' + performance.now(), 'Builder 被拽回赛道：上一版不够硬，正在重写「支配屏幕的那几行」…');
                         }
                     } else if (evt.phase === 'done') {
+                        if (evt.agent === 'builder' || evt.agent === 'fixer') {
+                            clearAgentStreamSnippet(evt.agent);
+                        }
                         if (evt.agent === 'narrative' || evt.agent === 'visual') {
                             onNvDone(evt.agent);
                         } else {
@@ -1355,10 +1487,26 @@
             };
         }
 
+        function restoreAgentStatesFromServer(data) {
+            const agents = data.current_iteration_agents;
+            if (!agents || typeof agents !== 'object') return;
+            Object.entries(agents).forEach(function([agentKey, info]) {
+                if (info.phase === 'done') {
+                    setAgentDone(agentKey);
+                } else if (info.phase === 'start') {
+                    updateAgentStatus(agentKey, agentKey === 'fixer' ? 'Fixing...' : 'Thinking...');
+                }
+            });
+        }
+
         window.addEventListener('load', async () => {
             connectSSE();
             await pollData();
             await loadAnalysisData();
+            try {
+                const res = await fetch('/get_data');
+                if (res.ok) restoreAgentStatesFromServer(await res.json());
+            } catch(e) {}
             setInterval(renderCollabNextRoundHint, 1000);
 
             setInterval(async () => {

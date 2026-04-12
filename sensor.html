@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGENTSART // SENSOR</title>
+    <title>幻棱 · 镜</title>
     <script src="./js/api_handler.js?v=20260328a"></script>
     <style>
         :root { 
@@ -113,7 +113,7 @@
     </div>
 
     <script type="module">
-        import { VisionSystem } from './js/vision_capture.js?v=20260329a';
+        import { VisionSystem } from './js/vision_capture.js?v=20260412a';
 
         // --- Global State ---
         let visionSystem = null;
@@ -126,13 +126,14 @@
             emotions: { joy: 0, tension: 0, surprise: 0, calm: 0 },
         };
 
-        /** 持续截图：检测到清晰人脸即保存到 localStorage + 上传服务端 */
-        const CONTINUOUS_CAPTURE_MS = 2000;
-        const UPLOAD_MIN_GAP_MS = 5000;
-        /** 预览与上传同一门槛：低于此值的 landmark 多为误检/挡镜头，避免 index 连续刷无人脸裁切 */
+        /** 自动采样与「清晰」同阈；OK 手势可强行触发（不要求达该阈，但仍需可裁剪的人脸） */
         const PREVIEW_CAPTURE_MIN_Q = 0.56;
         let lastFaceUploadAt = 0;
-        let captureUploading = false;
+        /** 同一张图：localStorage + /upload_face + /analyze_face_preview 只打一轮；离席 clear 后重置 */
+        let faceSampleCommitted = false;
+        let faceSampleInFlight = false;
+        /** 采样瞬间脸区青闪反馈（0→1），每帧衰减 */
+        let sampleFeedback = 0;
 
         /** 轮询服务端状态（badge、关键词闪现等） */
         const STATUS_POLL_MS = 500;
@@ -151,6 +152,23 @@
         let lastPollFaceCenter = null;
         let stableFramesPoll = 0;
         let lastKnownAnalysisStatus = 'idle';
+
+        /**
+         * 二选一谁先满足谁触发「整包采样」（同一张 JPEG：存本地 + upload + preview 分析）：
+         * (a) 质量 ≥ PREVIEW_CAPTURE_MIN_Q 且稳定帧 ≥16 时连续若干 rAF；
+         * (b) 任一手 OK 手势累计若干手部检测周期 — 强行触发（不要求达清晰阈）。
+         */
+        let previewQualityStreak = 0;
+        let previewGestureStreak = 0;
+        const PREVIEW_TRIGGER_QUALITY_STREAK = 8;
+        const PREVIEW_TRIGGER_GESTURE_STREAK = 20;
+
+        /** 已采样后：脸廓几何与上次成功提交差异持续超阈则视为换人，触发与 OK 相同的整包覆盖采样 */
+        const FACE_REPLACE_SIM_THRESHOLD = 0.74;
+        const FACE_REPLACE_STREAK_FRAMES = 10;
+        const FACE_REPLACE_MIN_Q = 0.5;
+        let lastCommittedFaceFingerprint = null;
+        let faceReplaceStreak = 0;
 
         // --- Face Detection ---
         async function initFaceDetection() {
@@ -198,6 +216,9 @@
                 if (localStorage.getItem(key) !== cur) {
                     localStorage.removeItem('agentsart_latest_capture');
                     localStorage.setItem(key, cur);
+                    faceSampleCommitted = false;
+                    lastCommittedFaceFingerprint = null;
+                    faceReplaceStreak = 0;
                 }
             } catch (e) {
                 console.warn('[AgentsArt] server_boot sync skipped:', e);
@@ -253,12 +274,12 @@
             const st = (d && d.face_analysis_status) || 'idle';
             const hasFace = sharedData.face && sharedData.face.length > 10;
             let t = '';
-            if (captureUploading) t = '上传中 · Uploading';
-            else if (st === 'analyzing') t = '分析中 · Analyzing';
-            else if (st === 'ready') t = '就绪 · Ready';
-            else if (st === 'error') t = '错误 · Error';
-            else if (hasFace) t = '追踪中 · Tracking';
-            else t = '待机 · Idle';
+            if (faceSampleInFlight) t = '采样中';
+            else if (st === 'analyzing') t = '凝视分析中';
+            else if (st === 'ready') t = '凝视已建立';
+            else if (st === 'error') t = '分析异常';
+            else if (hasFace) t = '追踪中';
+            else t = '待凝视';
             el.textContent = t;
         }
 
@@ -268,11 +289,67 @@
             400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
             54, 103, 67, 109
         ];
+
+        /**
+         * 脸廓几何指纹（视频归一化坐标，不平移画布 UV）：平移到质心、按平均半径缩放后展平，再 L2 归一。
+         * 同人不同表情余弦相似度通常较高；换人则持续偏低，配合 streak 防抖。
+         */
+        function computeFaceOvalFingerprint(faceLm) {
+            if (!faceLm || faceLm.length < 200) return null;
+            const idx = FACE_OVAL_INDICES;
+            const n = idx.length;
+            let sx = 0;
+            let sy = 0;
+            let ok = 0;
+            for (let i = 0; i < n; i++) {
+                const p = faceLm[idx[i]];
+                if (!p) return null;
+                sx += p.x;
+                sy += p.y;
+                ok++;
+            }
+            if (ok < n) return null;
+            const cx = sx / n;
+            const cy = sy / n;
+            let meanR = 0;
+            for (let i = 0; i < n; i++) {
+                const p = faceLm[idx[i]];
+                meanR += Math.hypot(p.x - cx, p.y - cy);
+            }
+            meanR /= n;
+            const scale = Math.max(meanR, 0.04);
+            const out = new Float32Array(n * 2);
+            let k = 0;
+            for (let i = 0; i < n; i++) {
+                const p = faceLm[idx[i]];
+                out[k++] = (p.x - cx) / scale;
+                out[k++] = (p.y - cy) / scale;
+            }
+            let sum = 0;
+            for (let i = 0; i < out.length; i++) sum += out[i] * out[i];
+            const inv = 1 / (Math.sqrt(sum) + 1e-8);
+            for (let i = 0; i < out.length; i++) out[i] *= inv;
+            return out;
+        }
+
+        function fingerprintCosineSimilarity(a, b) {
+            if (!a || !b || a.length !== b.length) return 0;
+            let s = 0;
+            for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+            return s;
+        }
+
+        function storeCommittedFaceFingerprint() {
+            const fp = computeFaceOvalFingerprint(sharedData.face);
+            lastCommittedFaceFingerprint = fp ? Float32Array.from(fp) : null;
+            faceReplaceStreak = 0;
+        }
         const SEG_MAX = 160;
         const segScratch = new Float32Array(SEG_MAX * 4);
         /** 轮廓线段端点时间平滑，减轻 MediaPipe 抖动导致的细线闪烁与脸周引力折皱 */
         const smoothSegScratch = new Float32Array(SEG_MAX * 4);
-        const SEG_LINE_SMOOTH = 0.16;
+        /** 过小则轮廓会随时间越贴 raw landmark，窄带 cnL/cnT 渐尖、力场渐「实」 */
+        const SEG_LINE_SMOOTH = 0.17;
         let smoothSegPrimed = false;
         let lastSmoothedSegFloats = 0;
         const persistScratch = new Float32Array(SEG_MAX * 4);
@@ -464,6 +541,8 @@
                     emotion_calm: f32,
                     /** 裁员等外部标量（如 2026 人数），调制 tide/fbm 相位与偏移 */
                     layoff_count: f32,
+                    /** 人脸采样反馈：1=刚触发，每帧由 JS 衰减；脸内与轮廓邻域叠青 */
+                    sample_feedback: f32,
                 };
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
                 @group(0) @binding(1) var<storage, read> segments: array<vec4<f32>>;
@@ -569,8 +648,8 @@
 
                     // uniforms.time 为秒级（与 social 一致）；系数缩小以保持原先缓慢漂移感
                     let tide = vec2<f32>(
-                        sin(uniforms.time * 0.0048 + uv.y * 0.3 + layPhase * 4.2 + layWave.x) * 0.011,
-                        cos(uniforms.time * 0.0036 + uv.x * 0.25 + layPhase * 3.1 + layWave.y) * 0.0085
+                        sin(uniforms.time * 0.0028 + uv.y * 0.11 + layPhase * 2.1 + layWave.x) * 0.0055,
+                        cos(uniforms.time * 0.0022 + uv.x * 0.09 + layPhase * 1.7 + layWave.y) * 0.0042
                     ) * tideMul;
                     p = p + tide;
 
@@ -581,6 +660,7 @@
                     let kFace = 9.15;
                     let faceDecaySteep = 1.38;
                     let pr = uniforms.presence;
+                    let prC = min(uniforms.presence, 0.52);
 
                     for (var i: i32 = 0; i < 160; i = i + 1) {
                         if (i >= nF) { break; }
@@ -625,26 +705,33 @@
                     }
 
                     let wsum = max(length(acc), 1e-6);
-                    let pullAmp = 0.00335 + uniforms.motion * 0.0026 + uniforms.presence * 0.0019;
+                    // pullAmp: 去掉 presence 常驻项（它让脸内像素在 acc 方向随 segment 抖动持续漂移）
+                    let pullAmp = 0.002 + uniforms.motion * 0.003;
 
                     let pForFaceMask = p;
                     let faceIn = face_interior_winding(pForFaceMask, nF) * uniforms.contour_fade * sb;
-                    let driftScale = mix(1.0, 0.48, faceIn);
-                    // 仅轮廓/脸邻域施加引力位移，避免远处像素被 acc 统一拽向脸
-                    let driftMask = clamp(nearLoose * nearLoose * 7.4 + nearTight * nearTight * 4.2 + faceIn * 0.5, 0.0, 1.0);
+                    // 脸内漂移大幅压低：0.48 → 0.12，静止时面孔内部几乎不受 segment 抖动影响
+                    let driftScale = mix(1.0, 0.12, faceIn);
+                    let driftMask = clamp(nearLoose * nearLoose * 7.4 + nearTight * nearTight * 4.2 + faceIn * 0.25, 0.0, 1.0);
                     let drift = (acc / wsum) * pullAmp * driftScale * driftMask;
-
-                    p = p + drift;
-                    let cnL = clamp(nearLoose * (1.0 + uniforms.presence * 0.085), 0.0, 1.0);
+                    // 面孔引力/抖动不向外拖采样点，避免背景流体被脸周场变形
+                    p = p + drift * faceIn;
+                    // prC：压制 presence 慢爬满后 cnL/cnT/rim 持续变亮
+                    let cnL = clamp(nearLoose * (1.0 + prC * 0.032), 0.0, 1.0);
                     let lineA = clamp(uniforms.contour_line_alpha, 0.0, 1.0);
-                    let cnT = clamp(nearTight * (1.1 + uniforms.presence * 0.12) * lineA, 0.0, 1.0);
+                    let cnT = clamp(nearTight * (1.08 + prC * 0.1) * lineA, 0.0, 1.0);
                     let dbg = uniforms.contour_debug;
                     // 调试：去掉宽场 cnL 的范围光/晕染，仅保留窄带 cnT 用于细线
-                    let cnLVis = cnL * (1.0 - dbg);
+                    let cnLVisRaw = cnL * (1.0 - dbg);
+                    // pow 压低宽场「平台」、再 cap：脸刚出现时 cnL 宽而浅，易叠成多圈光晕；收窄后只保留贴线一圈
+                    let cnLVis = min(pow(clamp(cnLVisRaw, 0.0, 1.0), 1.26), 0.42);
 
-                    // 脸外流体：相位仅由 time + 空间权重驱动，不叠情绪缓变（否则长时间观感持续漂移）
-                    let faceFluidW = clamp(max(faceIn, cnLVis * 0.36), 0.0, 1.0);
+                    // 仅脸内 winding 算「近脸」：cnLVis 在轮廓外仍宽，会外扩 blend/相位/晕色到背景
+                    let faceFluidW = clamp(faceIn, 0.0, 1.0);
                     let farFluid = 1.0 - faceFluidW;
+                    /** 脸缘带只随 faceIn + 脸内 cnL，轮廓外不参与 */
+                    let haloBand = clamp(cnLVis * faceIn * 1.95 + faceIn * 0.36, 0.0, 1.0) * sb;
+                    let tNearStable = layPhase * 6.283185307 + layWave.x * 0.31 + layWave.y * 0.24 + cnLVis * faceIn * 0.11;
 
                     // —— social.html 同源全屏 fbm（uv / p / t 与 social 片段着色器一致；与 toNdc 线段无关）——
                     var pSoc = (uv - vec2<f32>(0.5)) * 2.0;
@@ -663,41 +750,49 @@
                     let socCyan = vec3<f32>(0.0, 0.75, 0.90);
                     var colSoc = mix(socDeep, socMid, clamp(length(qSoc), 0.0, 1.0));
                     colSoc = mix(colSoc, socCyan, clamp(pow(fSoc, 2.0) * 1.5, 0.0, 1.0));
-                    let scanLn = sin(fragCoord.y * 1.4) * 0.015;
+                    let scanLn = sin(fragCoord.y * 0.55) * 0.006;
                     let rgbSocialScan = (fSoc * fSoc * fSoc + 0.6 * fSoc * fSoc + 0.45 * fSoc) * colSoc - vec3<f32>(scanLn, scanLn, scanLn);
 
-                    // 远场相位=volBg（与 tSoc 一致）；仅近轮廓/脸周混入随脸反应的 volatility
+                    // 远场相位随秒级 time 漂移；近脸静止时混入有界相位，减轻脸周等值线长期对齐
                     let volNear = mix(volBg, uniforms.volatility, clamp(faceFluidW * 1.15, 0.0, 1.0));
-                    let tFlow = uniforms.time * (0.035 + volNear * 0.05) * mix(1.0, 0.62, faceFluidW);
+                    let tFlowRaw = uniforms.time * (0.035 + volNear * 0.05) * mix(1.0, 0.62, faceFluidW);
+                    let tFlowCyc = fract(uniforms.time * 0.00036 + layPhase * 0.018 + faceFluidW * 0.05) * 6.283185307;
+                    let stillNear = clamp((1.0 - uniforms.motion * 5.5) * faceFluidW * faceFluidW * 2.4, 0.0, 1.0);
+                    let tFlow = mix(tFlowRaw, tFlowCyc * 0.42 + faceFluidW * 0.31, stillNear * 0.88);
+                    let tFlowAnim = mix(tFlow, tNearStable, haloBand);
 
                     let flowMul = mix(1.0, 0.30, faceIn);
 
                     // 远场不受 silhouette 渐显「砍半」；近脸/轮廓仍保留原 sb 柔化，避免进出画时跳变
                     let sbWiggle = mix(mix(0.5, 1.0, sb), 1.0, farFluid);
-                    let ampNear = uniforms.motion * 0.0016 * cnLVis + cnLVis * 0.0032 + uniforms.emotion_tension * 0.014 * cnLVis;
-                    // 远场减弱微摆动，更接近 social 的纯 fbm 流动
-                    let amp = (0.0016 + ampNear * 0.65 + farFluid * 0.00135) * sbWiggle * flowMul;
+                    let ampNear = uniforms.motion * 0.0016 * cnLVis * faceIn + cnLVis * faceIn * 0.00028 + uniforms.emotion_tension * 0.0045 * cnLVis * faceIn;
+                    let amp = (0.0016 + ampNear * 0.55 + farFluid * 0.00135) * sbWiggle * flowMul;
 
+                    // 勿把 cnLVis 放进 sin 相位：距轮廓半径会调制相位 → 脸周长时间「游移圈纹」。近轮廓强衰减 + 低频相位。
+                    let wiggleNear = 1.0 - clamp(cnLVis * faceIn * 0.88, 0.0, 0.94);
+                    let wiggleFar = mix(0.22, 1.0, farFluid);
                     p = p + vec2<f32>(
-                        sin((p.y + tFlow * flowMul) * 3.4 + cnLVis * 3.7 + layWave.y * 0.15),
-                        cos((p.x - tFlow * flowMul) * 3.2 - cnLVis * 3.2 - layPhase * 0.4)
-                    ) * amp;
+                        sin(p.y * 1.05 + tFlowAnim * flowMul * 0.38 + layWave.y * 0.06),
+                        cos(p.x * 1.02 - tFlowAnim * flowMul * 0.36 - layPhase * 0.12)
+                    ) * amp * wiggleNear * wiggleFar;
                     
                     let sbFbm = mix(mix(0.45, 1.0, sb), 1.0, farFluid);
-                    let pFbmWarp = min(0.03, (0.014 * cnLVis * sbFbm + farFluid * 0.012) * flowMul);
+                    // cnLVis 对 FBM warp 的权重减半：近轮廓 FBM 扭曲过强会形成同心等值圈纹
+                    let pFbmWarp = min(0.022, (0.0055 * cnLVis * faceIn * sbFbm + farFluid * 0.012) * flowMul);
                     let pFbm = p + vec2<f32>(
-                        fbm(p * 0.48 + vec2<f32>(cnLVis * 0.32 + layWave.y * 0.04, layPhase * 0.06)),
-                        fbm(p * 0.48 + vec2<f32>(layPhase * 0.05, cnLVis * 0.32 + layWave.x * 0.04))
+                        fbm(p * 0.48 + vec2<f32>(cnLVis * faceIn * 0.32 + layWave.y * 0.04, layPhase * 0.06)),
+                        fbm(p * 0.48 + vec2<f32>(layPhase * 0.05, cnLVis * faceIn * 0.32 + layWave.x * 0.04))
                     ) * pFbmWarp;
 
                     let q = vec2<f32>(fbm(pFbm + vec2<f32>(0.0)), fbm(pFbm + vec2<f32>(1.0)));
                     let r = vec2<f32>(
-                        fbm(pFbm + 4.0 * q + vec2<f32>(1.7, 9.2) + tFlow * 0.7),
-                        fbm(pFbm + 4.0 * q + vec2<f32>(8.3, 2.8) + tFlow * 0.6)
+                        fbm(pFbm + 4.0 * q + vec2<f32>(1.7, 9.2) + tFlowAnim * 0.7),
+                        fbm(pFbm + 4.0 * q + vec2<f32>(8.3, 2.8) + tFlowAnim * 0.6)
                     );
                     var f = fbm(pFbm + 4.0 * r);
-                    // 禁止 sin(f*高频+时间)：在 cnLVis 高的脸周会形成随时间移动的等值「圈纹」；仅做轻微对比与极低频呼吸
-                    f = f * (1.0 - cnLVis * 0.055) + cnLVis * 0.006 * sin(tFlow * 0.18 + layPhase * 0.9) * mix(0.35, 1.0, faceIn);
+                    // 脸周该项改绑 tNearStable，避免细亮等值线沿轮廓随时间爬行
+                    let cnLIn = cnLVis * faceIn;
+                    f = f * (1.0 - cnLIn * 0.055) + cnLIn * 0.0025 * sin(tNearStable * 0.95 + cnLIn * 0.35) * mix(0.2, 0.55, faceIn);
 
                     let indigoDeep = vec3<f32>(0.01, 0.03, 0.08); 
                     let indigoMid = vec3<f32>(0.04, 0.10, 0.28);  
@@ -706,14 +801,17 @@
                     var color = mix(indigoDeep, indigoMid, clamp(length(q), 0.0, 1.0));
                     // 调试时勿把 cnT 并进流体底色，否则会整条轮廓带发胀变粗
                     let cnTForFluid = cnT * (1.0 - dbg);
-                    let cyanMix = pow(f, 2.0) * 1.5 * (0.88 + cnLVis * 0.09 * mix(0.5, 1.0, sb) + cnTForFluid * 0.095 * mix(0.45, 1.0, sb));
-                    color = mix(color, cyanBright, clamp(cyanMix, 0.0, 1.0));
+                    // cnLVis/cnT 对 cyan 的提升在脸内+轮廓带再压一档，减轻内外「青晕」
+                    let cyanMixRaw = pow(f, 2.0) * 1.38 * (0.88 + cnLIn * 0.012 * mix(0.5, 1.0, sb) + cnTForFluid * faceIn * 0.020 * mix(0.45, 1.0, sb));
+                    let cyanHaloAtt = 1.0 - 0.58 * clamp(faceIn, 0.0, 1.0);
+                    color = mix(color, cyanBright, clamp(cyanMixRaw * cyanHaloAtt, 0.0, 1.0));
                     
-                    let finalWarp = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.014 * cnLVis);
+                    let finalWarp = (f * f * f + 0.6 * f * f + 0.45 * f) * color * (1.0 + uniforms.motion * 0.0045 * cnLIn * (1.0 - haloBand * 0.82)) * mix(1.0, 0.86, faceIn * 0.82);
                     let warpedScan = finalWarp - vec3<f32>(scanLn, scanLn, scanLn);
                     // 远场几乎等同 social；近轮廓/脸内以扭曲层为主
                     let blendSocial = clamp(pow(farFluid, 1.08) * 0.985 + (1.0 - sb) * 0.22, 0.0, 1.0);
-                    var outRgb = mix(warpedScan, rgbSocialScan, blendSocial);
+                    let socialHaloAtt = 1.0 - 0.34 * clamp(faceIn, 0.0, 1.0);
+                    var outRgb = mix(warpedScan, rgbSocialScan, blendSocial * socialHaloAtt);
 
                     // Face area → intensity boost (closer = brighter contour & flow)
                     let areaBoost = clamp(uniforms.face_area * 3.5, 0.0, 1.0);
@@ -722,44 +820,61 @@
                     let breathPulse = 1.0;
 
                     let lineEase = mix(0.38, 1.0, sb);
-                    var rim = pow(cnT, 1.42) * (0.09 + uniforms.presence * 0.055 + areaBoost * 0.035) * (1.0 - dbg) * lineEase;
-                    rim = rim * breathPulse * (1.0 + uniforms.emotion_surprise * 0.6);
+                    var rim = pow(cnT, 1.52) * (0.058 + prC * 0.036 + areaBoost * 0.022) * (1.0 - dbg) * lineEase * mix(0.5, 1.0, sb);
+                    rim = rim * breathPulse * (1.0 + uniforms.emotion_surprise * 0.38) * (1.0 - faceIn * 0.42) * mix(0.72, 1.0, farFluid);
 
-                    // Dynamic contour color: cool cyan (static) → warm gold (moving)
+                    // 脸缘光晕带内 rim 色温少跟 motion 变，减轻「金边呼吸」；远轮廓仍随动
                     let rimCool = vec3<f32>(0.05, 0.48, 0.62);
                     let rimWarm = vec3<f32>(0.50, 0.35, 0.10);
-                    let rimColor = mix(rimCool, rimWarm, clamp(uniforms.motion * 2.5, 0.0, 1.0));
-                    outRgb += rimColor * rim;
+                    let rimWarmAmt = clamp(uniforms.motion * 2.5, 0.0, 1.0) * (1.0 - haloBand * 0.88);
+                    let rimColor = mix(rimCool, rimWarm, rimWarmAmt);
+                    outRgb += rimColor * rim * faceIn;
 
-                    let dbgLine = pow(cnT, 5.85) * dbg * 1.02 * lineEase;
+                    let dbgLine = pow(cnT, 5.85) * dbg * 1.02 * lineEase * faceIn;
                     outRgb += vec3<f32>(0.18, 0.98, 1.0) * dbgLine;
 
-                    // Warm tint inside face region — modulated by joy / tension
-                    let joyW = uniforms.emotion_joy;
-                    let tensW = uniforms.emotion_tension;
-                    let warmTint = vec3<f32>(0.10 + joyW * 0.16, 0.03 - tensW * 0.04, 0.06 - joyW * 0.06 + tensW * 0.07);
-                    outRgb = outRgb + warmTint * faceIn * (0.30 + areaBoost * 0.12);
-
-                    // Ripple: expanding ring from face center on presence entry
+                    // Ripple：入场脉冲保留，但在轮廓窄带衰减并与脸缘解耦，避免与 cnL 光叠成随时间扫的晕圈
                     if (uniforms.ripple_phase >= 0.0) {
                         let faceC = toNdc(vec2<f32>(uniforms.face_cx, uniforms.face_cy), uniforms.res);
                         let rDist = distance(p, faceC);
-                        let rPhase = uniforms.ripple_phase;
+                        let rPhase = clamp(uniforms.ripple_phase, 0.0, 0.48);
                         let ringRadius = rPhase * 0.55;
                         let ringWidth = 0.12 + rPhase * 0.06;
                         let ringDist = abs(rDist - ringRadius);
                         let ringIntensity = exp(-ringDist * ringDist / (ringWidth * ringWidth)) * exp(-rPhase * 1.3);
-                        outRgb += vec3<f32>(0.04, 0.28, 0.38) * ringIntensity * 0.45;
+                        let ringContourSup = 1.0 - clamp(cnLVis * 1.55 + faceIn * 0.32, 0.0, 0.9);
+                        outRgb += vec3<f32>(0.04, 0.28, 0.38) * ringIntensity * 0.45 * ringContourSup * faceIn;
                     }
 
-                    // 情绪色偏：主要贴在脸内与轮廓邻域；全屏仅保留微弱泄漏（避免脸外流体被情绪染色）
+                    let joyW = uniforms.emotion_joy;
+                    let tensW = uniforms.emotion_tension;
+                    let warmTint = vec3<f32>(0.10 + joyW * 0.16, 0.03 - tensW * 0.04, 0.06 - joyW * 0.06 + tensW * 0.07);
+
+                    // calm 仅脸内生效，避免情绪分析结果外泄改背景
                     let emoSb = clamp(sb, 0.0, 1.0);
-                    let emoLocal = clamp(max(faceIn, cnLVis * 0.5), 0.0, 1.0);
-                    let emoTintW = mix(0.07, 1.0, emoLocal) * emoSb;
-                    outRgb = outRgb + vec3<f32>(0.07, 0.025, -0.02) * uniforms.emotion_joy * emoTintW;
-                    outRgb = outRgb + vec3<f32>(-0.02, 0.005, 0.07) * uniforms.emotion_tension * emoTintW;
-                    outRgb = outRgb + vec3<f32>(0.055, 0.055, 0.06) * uniforms.emotion_surprise * emoTintW;
-                    outRgb = outRgb * (1.0 - uniforms.emotion_calm * 0.12 * mix(0.08, 1.0, emoLocal) * emoSb);
+                    let emoLocal = clamp(faceIn, 0.0, 1.0);
+                    let calmFac = 1.0 - uniforms.emotion_calm * 0.12 * mix(0.08, 1.0, emoLocal) * emoSb;
+                    outRgb = outRgb * mix(1.0, calmFac, faceIn);
+
+                    // 黑纱仅随脸内 winding（faceIn），轮廓邻域 cnLVis 不参与 — 否则 max(..., cnLVis) 会在脸外一圈叠黑晕
+                    let faceShieldRaw = smoothstep(0.06, 0.94, faceIn * 1.12);
+                    let faceShield = pow(faceShieldRaw, 1.14);
+                    let blackVeil = faceShield * mix(0.82, 0.58, faceIn);
+                    outRgb = mix(outRgb, vec3<f32>(0.0, 0.0, 0.0), blackVeil);
+
+                    // 情绪与暖色叠在黑纱之后，脸内/轮廓邻域才看得见变化
+                    let emFaceTint = clamp(faceIn * 0.98, 0.0, 1.0) * emoSb;
+                    let emW = mix(0.12, 0.92, emoLocal);
+                    outRgb = outRgb + vec3<f32>(0.07, 0.025, -0.02) * uniforms.emotion_joy * emFaceTint * emW;
+                    outRgb = outRgb + vec3<f32>(-0.02, 0.005, 0.07) * uniforms.emotion_tension * emFaceTint * emW;
+                    outRgb = outRgb + vec3<f32>(0.055, 0.055, 0.06) * uniforms.emotion_surprise * emFaceTint * emW;
+                    outRgb = outRgb + warmTint * faceIn * (0.17 + areaBoost * 0.07) * emoSb;
+
+                    let sfb = clamp(uniforms.sample_feedback, 0.0, 1.0);
+                    if (sfb > 0.001) {
+                        outRgb += vec3<f32>(0.02, 0.36, 0.44) * faceIn * sfb;
+                        outRgb += vec3<f32>(0.05, 0.42, 0.48) * faceIn * sfb * 0.55;
+                    }
 
                     return vec4<f32>(outRgb, 1.0);
                 }
@@ -801,6 +916,8 @@
         let trackedRightPresence = 0;
         /** 滞后于 contour_fade，削弱头手进出时引力/流速/高亮的阶跃感 */
         let trackedSilhouetteBlend = 0;
+        /** faceSpeed 经 EMA 平滑后再进 deadZone，抑制 MediaPipe 单帧 landmark 抖动导致的假速度 */
+        let smoothedFaceSpeed = 0;
         let trackedFaceArea = 0;
         let trackedEmotionJoy = 0;
         let trackedEmotionTension = 0;
@@ -811,7 +928,7 @@
         let prevPresenceBelow = true;
         /** 与 WGSL Uniforms 顺序一致；[27]=layoff_count */
         const LAYOFF_COUNT_FOR_SHADER = 40482;
-        const _uniformScratch = new Float32Array(28);
+        const _uniformScratch = new Float32Array(29);
 
         function lerp(a, b, t) {
             return a + (b - a) * t;
@@ -867,28 +984,32 @@
             if (hasFace && lastFaceCenter && dtSeconds > 0) {
                 faceSpeed = Math.hypot(faceCenter[0] - lastFaceCenter[0], faceCenter[1] - lastFaceCenter[1]) / dtSeconds;
             }
-            sharedData.instantFaceSpeed = hasFace ? faceSpeed : 0;
+            // 先 EMA 平滑，再进死区。单帧 landmark 抖动常把 faceSpeed 推到死区边缘，平滑后才能被死区吃掉
+            smoothedFaceSpeed = hasFace ? lerp(smoothedFaceSpeed, faceSpeed, 0.35) : smoothedFaceSpeed * 0.5;
+            sharedData.instantFaceSpeed = hasFace ? smoothedFaceSpeed : 0;
 
-            const motionComposite = faceSpeed * 0.4;
-            // 略提高死区： landmark 微抖会长期撑住 trackedMotion，脸周 pullAmp/volatility 不降 → 折皱观感随时间变重
-            const deadZone = 0.024;
+            const motionComposite = smoothedFaceSpeed * 0.4;
+            // deadZone 提到 0.045：MediaPipe 静止抖动折算的 faceSpeed 典型 0.02~0.08，必须彻底落在死区内
+            const deadZone = 0.045;
             const gated = Math.max(0, motionComposite - deadZone);
             const rawMotion = Math.min(1.0, gated * 0.85);
-            // 静止时加快衰减，避免 motion 长期偏高把脸周流体拉得过宽
-            const motionLerp = rawMotion < 0.05 ? 0.14 : 0.06;
+            // 静止（gated==0）时用更大 alpha 强制归零；有动作时轻柔跟随
+            const motionLerp = gated <= 0 ? 0.28 : 0.08;
             trackedMotion = lerp(trackedMotion, rawMotion, motionLerp);
-            trackedMotion = Math.min(trackedMotion, 0.26);
+            if (trackedMotion < 0.004) trackedMotion = 0;
+            trackedMotion = Math.min(trackedMotion, 0.16);
 
             lastFaceCenter = faceCenter || lastFaceCenter;
 
             const areaTarget = Math.min(0.52, Math.max(0, sharedData.faceArea || 0));
-            trackedFaceArea = lerp(trackedFaceArea, areaTarget, 0.06);
+            // 略快收敛：过慢的 area / 情绪缓入会让脸周 rim、色偏在数十秒内持续「变亮变实」
+            trackedFaceArea = lerp(trackedFaceArea, areaTarget, 0.16);
 
             const emo = sharedData.emotions || { joy: 0, tension: 0, surprise: 0, calm: 0 };
-            trackedEmotionJoy = lerp(trackedEmotionJoy, emo.joy, 0.06);
-            trackedEmotionTension = lerp(trackedEmotionTension, emo.tension, 0.06);
-            trackedEmotionSurprise = lerp(trackedEmotionSurprise, emo.surprise, 0.06);
-            trackedEmotionCalm = lerp(trackedEmotionCalm, emo.calm, 0.06);
+            trackedEmotionJoy = lerp(trackedEmotionJoy, emo.joy, 0.12);
+            trackedEmotionTension = lerp(trackedEmotionTension, emo.tension, 0.12);
+            trackedEmotionSurprise = lerp(trackedEmotionSurprise, emo.surprise, 0.12);
+            trackedEmotionCalm = lerp(trackedEmotionCalm, emo.calm, 0.12);
 
             if (trackedPresence > 0.15 && prevPresenceBelow) {
                 ripplePhaseTimer = 0;
@@ -896,11 +1017,20 @@
             prevPresenceBelow = trackedPresence < 0.05;
         }
 
-        /** 轻量人头清晰度：不参与像素运算，仅 MediaPipe 几何 + 稳定性；轮询成本低 */
+        /** 轻量人头清晰度：不参与像素运算，仅 MediaPipe 几何 + 稳定性；轮询成本低。
+         *  每帧仅计算一次（多调用者共享同一帧缓存），避免 stableFramesPoll / lastPollFaceCenter 被重复修改。
+         */
+        let _headshotQCachedTime = -1;
+        let _headshotQCachedVal = 0;
         function computeHeadshotQuality() {
+            const now = performance.now();
+            if (now - _headshotQCachedTime < 4) return _headshotQCachedVal;
+            _headshotQCachedTime = now;
+
             if (!sharedData.face || sharedData.face.length < 10) {
                 lastPollFaceCenter = null;
                 stableFramesPoll = 0;
+                _headshotQCachedVal = 0;
                 return 0;
             }
             const c = getCenter(sharedData.face);
@@ -923,7 +1053,8 @@
             lastPollFaceCenter = c;
 
             const stabilityScore = Math.min(1, stableFramesPoll / 16);
-            return areaScore * 0.48 + speedScore * 0.34 + stabilityScore * 0.18;
+            _headshotQCachedVal = areaScore * 0.48 + speedScore * 0.34 + stabilityScore * 0.18;
+            return _headshotQCachedVal;
         }
 
         async function clearPresenceBecauseNoFace() {
@@ -933,11 +1064,129 @@
                 localStorage.removeItem('agentsart_latest_capture');
                 stableFramesPoll = 0;
                 lastPollFaceCenter = null;
+                resetFaceSampleStreaks();
+                faceSampleCommitted = false;
+                lastCommittedFaceFingerprint = null;
+                faceReplaceStreak = 0;
                 await window.AgentsArtApi.callApiWithRetry('/clear_presence', {}, { silent: true });
             } catch (e) {
                 console.warn('[AgentsArt] clear_presence:', e);
             } finally {
                 presenceClearInFlight = false;
+            }
+        }
+
+        function resetFaceSampleStreaks() {
+            previewQualityStreak = 0;
+            previewGestureStreak = 0;
+            faceReplaceStreak = 0;
+        }
+
+        /**
+         * 单次 JPEG：写本地、upload_face、analyze_face_preview。
+         * 自动稳定仅在未采样过时触发；OK 与「脸廓判定换人」可随时再采（覆盖服务端图与预分析）。
+         */
+        async function commitFaceSample(reason) {
+            if (faceSampleInFlight || !visionSystem) return;
+            const canOverride = reason === 'ok-gesture' || reason === 'face-replaced';
+            if (faceSampleCommitted && !canOverride) return;
+            const hasFace = sharedData.face && sharedData.face.length > 10;
+            if (!hasFace) return;
+
+            const q = computeHeadshotQuality();
+            if (reason === 'auto-stability' && q < PREVIEW_CAPTURE_MIN_Q) return;
+            if (reason === 'face-replaced' && q < FACE_REPLACE_MIN_Q) return;
+
+            const base64 = visionSystem.captureFrame();
+            if (!base64) return;
+
+            faceSampleInFlight = true;
+            sampleFeedback = 1;
+            if (reason === 'ok-gesture' || reason === 'face-replaced') resetFaceSampleStreaks();
+            const now = Date.now();
+            lastFaceUploadAt = now;
+            try {
+                console.log('[AgentsArt] face sample (upload+preview same frame):', reason, 'q=', q.toFixed(2));
+                localStorage.setItem(
+                    'agentsart_latest_capture',
+                    JSON.stringify({ image: base64, timestamp: now, quality: q, trigger: reason })
+                );
+                const body = JSON.stringify({ image: base64 });
+                const up = await fetch('/upload_face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body,
+                });
+                if (!up.ok) throw new Error('upload_face ' + up.status);
+                const pv = await fetch('/analyze_face_preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body,
+                });
+                if (!pv.ok) throw new Error('analyze_face_preview ' + pv.status);
+                faceSampleCommitted = true;
+                storeCommittedFaceFingerprint();
+            } catch (e) {
+                console.warn('[AgentsArt] commitFaceSample:', e);
+                resetFaceSampleStreaks();
+            } finally {
+                faceSampleInFlight = false;
+            }
+        }
+
+        function tickFaceSampleTrigger() {
+            if (faceSampleInFlight) return;
+            const hasFace = sharedData.face && sharedData.face.length > 10;
+            if (!hasFace) {
+                previewQualityStreak = 0;
+                previewGestureStreak = 0;
+                return;
+            }
+
+            const q = computeHeadshotQuality();
+            if (!faceSampleCommitted) {
+                if (q >= PREVIEW_CAPTURE_MIN_Q && stableFramesPoll >= 16) {
+                    previewQualityStreak++;
+                } else {
+                    previewQualityStreak = Math.max(0, previewQualityStreak - 2);
+                }
+            } else {
+                previewQualityStreak = 0;
+            }
+
+            if (sharedData.handGesture === 'ok') {
+                previewGestureStreak++;
+            } else {
+                previewGestureStreak = Math.max(0, previewGestureStreak - 2);
+            }
+
+            if (previewGestureStreak >= PREVIEW_TRIGGER_GESTURE_STREAK) {
+                void commitFaceSample('ok-gesture');
+            } else if (!faceSampleCommitted && previewQualityStreak >= PREVIEW_TRIGGER_QUALITY_STREAK) {
+                void commitFaceSample('auto-stability');
+            }
+        }
+
+        function tickFaceReplace() {
+            if (!faceSampleCommitted || faceSampleInFlight || !sharedData.face || sharedData.face.length < 10) {
+                return;
+            }
+            if (!lastCommittedFaceFingerprint) return;
+            const q = computeHeadshotQuality();
+            if (q < FACE_REPLACE_MIN_Q) {
+                faceReplaceStreak = Math.max(0, faceReplaceStreak - 1);
+                return;
+            }
+            const cur = computeFaceOvalFingerprint(sharedData.face);
+            if (!cur) return;
+            const sim = fingerprintCosineSimilarity(cur, lastCommittedFaceFingerprint);
+            if (sim < FACE_REPLACE_SIM_THRESHOLD) {
+                faceReplaceStreak++;
+            } else {
+                faceReplaceStreak = Math.max(0, faceReplaceStreak - 2);
+            }
+            if (faceReplaceStreak >= FACE_REPLACE_STREAK_FRAMES) {
+                void commitFaceSample('face-replaced');
             }
         }
 
@@ -989,43 +1238,32 @@
             }
         }
 
-        /** 持续截图：仅有人脸且质量达标时裁剪上传；与 rAF 检测交错时再校验一次脸，避免全画面兜底截图 */
-        async function continuousFaceCapture() {
-            if (!visionSystem || captureUploading) return;
-            const q = computeHeadshotQuality();
-            if (!sharedData.face || sharedData.face.length < 10) return;
-            if (q < PREVIEW_CAPTURE_MIN_Q) return;
-
-            try {
-                const base64 = visionSystem.captureFrame();
-                if (!base64) return;
-                localStorage.setItem(
-                    'agentsart_latest_capture',
-                    JSON.stringify({ image: base64, timestamp: Date.now(), quality: q })
-                );
-
-                const now = Date.now();
-                if (now - lastFaceUploadAt < UPLOAD_MIN_GAP_MS) return;
-
-                captureUploading = true;
-                lastFaceUploadAt = now;
-                await fetch('/upload_face', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64 }),
-                });
-            } catch (e) {
-                console.warn('[AgentsArt] continuousFaceCapture:', e);
-            } finally {
-                captureUploading = false;
-            }
+        let _sensorPollFail = 0;
+        function _showSensorConnLost() {
+            if (document.getElementById('conn-lost-overlay')) return;
+            var el = document.createElement('div');
+            el.id = 'conn-lost-overlay';
+            el.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(5,2,10,0.82);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Inter,sans-serif;color:rgba(255,255,255,0.7);backdrop-filter:blur(8px)';
+            el.innerHTML = '<div style="font-size:14px;letter-spacing:0.15em;margin-bottom:8px;color:rgba(212,175,55,0.8)">系统重启中</div><div style="font-size:11px;opacity:0.55;letter-spacing:0.12em">Reconnecting…</div>';
+            document.body.appendChild(el);
+        }
+        function _hideSensorConnLost() {
+            var el = document.getElementById('conn-lost-overlay');
+            if (el) el.remove();
+            _sensorPollFail = 0;
         }
 
         /** 轮询服务端状态：badge、关键词闪现 */
         async function pollServerStatus() {
             try {
                 const r = await fetch('/get_data?t=' + Date.now(), { cache: 'no-store' });
-                if (!r.ok) return;
+                if (!r.ok) {
+                    _sensorPollFail++;
+                    if (_sensorPollFail >= 3) _showSensorConnLost();
+                    return;
+                }
+                _sensorPollFail = 0;
+                _hideSensorConnLost();
                 const d = await r.json();
                 applySensorPerfFromPayload(d);
                 updateIterationFaceBadge(d);
@@ -1035,6 +1273,8 @@
                 }
                 lastKnownAnalysisStatus = newAnalysisStatus;
             } catch (e) {
+                _sensorPollFail++;
+                if (_sensorPollFail >= 3) _showSensorConnLost();
                 console.warn('[AgentsArt] status poll:', e);
             }
         }
@@ -1071,6 +1311,8 @@
             lastTime = time;
             const dtSeconds = Math.max(0.001, Math.min(0.05, deltaTime * 0.001));
 
+            sampleFeedback = Math.max(0, sampleFeedback - deltaTime * 0.00115);
+
             const canvas = document.getElementById('gpuCanvas');
             updateTracking(dtSeconds);
 
@@ -1104,18 +1346,20 @@
                 }
                 if (!nz) smoothSegScratch.fill(0);
             }
-            trackedContourFade = lerp(trackedContourFade, segTotal > 0 ? 1.0 : 0.0, segTotal > 0 ? 0.12 : 0.04);
+            trackedContourFade = lerp(trackedContourFade, segTotal > 0 ? 1.0 : 0.0, segTotal > 0 ? 0.14 : 0.04);
             trackedSilhouetteBlend = lerp(
                 trackedSilhouetteBlend,
                 trackedContourFade,
-                segTotal > 0 ? 0.18 : 0.035
+                segTotal > 0 ? 0.26 : 0.035
             );
             const lineTarget = segTotal > 0 ? 1.0 : 0.0;
+            // 原 0.06 入场过慢，脸周窄带/rim 会像力场被慢慢「拧实」；提高入场系数、略压低稳态避免刺眼
             trackedContourLineAlpha = lerp(
                 trackedContourLineAlpha,
                 lineTarget,
-                segTotal > 0 ? 0.06 : 0.008
+                segTotal > 0 ? 0.2 : 0.008
             );
+            if (segTotal > 0 && trackedContourLineAlpha > 0.88) trackedContourLineAlpha = 0.88;
 
             const useLiveSeg = segTotal > 0;
             // 细线可先隐去，但仍保留脸廓折线直到 contour_fade 收尾，否则片元里 winding 瞬间为 0，
@@ -1141,6 +1385,11 @@
                 ripplePhaseTimer += deltaTime * 0.001;
                 if (ripplePhaseTimer > 3.0) ripplePhaseTimer = -10;
             }
+
+            tickFaceSampleTrigger();
+            tickFaceReplace();
+            tickNoFacePresence();
+            tickLowQualityFaceClear();
 
             let faceCU = 0.5, faceCV = 0.5;
             if (lastFaceCenter) {
@@ -1178,9 +1427,9 @@
             _uniformScratch[25] = trackedEmotionSurprise;
             _uniformScratch[26] = trackedEmotionCalm;
             _uniformScratch[27] = LAYOFF_COUNT_FOR_SHADER;
+            _uniformScratch[28] = sampleFeedback;
             webgpuDevice.queue.writeBuffer(uniformBuffer, 0, _uniformScratch);
 
-            // 渲染管线执行
             const commandEncoder = webgpuDevice.createCommandEncoder();
             const passEncoder = commandEncoder.beginRenderPass({
                 colorAttachments: [{
@@ -1189,17 +1438,11 @@
                     loadOp: 'clear', storeOp: 'store',
                 }]
             });
-            
-            // 绘制深邃背景
             passEncoder.setPipeline(bgPipeline);
             passEncoder.setBindGroup(0, bgBindGroup);
             passEncoder.draw(3, 1, 0, 0);
-
             passEncoder.end();
             webgpuDevice.queue.submit([commandEncoder.finish()]);
-
-            tickNoFacePresence();
-            tickLowQualityFaceClear();
         }
 
 
@@ -1215,7 +1458,6 @@
                     requestAnimationFrame(animate); // 启动 WebGPU 动画流
                 }
                 await initFaceDetection();
-                setInterval(continuousFaceCapture, CONTINUOUS_CAPTURE_MS);
                 setInterval(pollServerStatus, STATUS_POLL_MS);
             } catch (error) {
                 console.error('Sensor init failed:', error);

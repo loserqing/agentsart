@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
@@ -27,6 +28,11 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 def _evolution_chain_from_env() -> bool:
     return os.getenv("AGENTSART_EVOLUTION_CHAIN", "").strip().lower() in ("1", "true", "yes")
+
+
+def _compact_prompts_enabled() -> bool:
+    """缩短 Builder/Judge/Fixer 等 prompt，降低输入 token（质量请自行 A/B；默认关保留长版）。"""
+    return os.getenv("AGENTSART_COMPACT_PROMPTS", "0").strip().lower() in ("1", "true", "yes", "on")
 
 
 # iteration_log.json 最多保留条数（0 表示不截断）
@@ -117,12 +123,236 @@ def _technique_seed(technique: str) -> str:
     return ""
 
 
+def _compose_builder_prompt_compact(
+    *,
+    technique: str,
+    style: str,
+    concept: str,
+    critic_block: str,
+    use_chain: bool,
+    prev_code: str,
+) -> str:
+    crit = critic_block.strip()
+    seed = _technique_seed(technique)
+    inherit = _build_code_inherit_block(use_chain, prev_code)
+    inst = (
+        "InstancedMesh 着色：mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(n*3),3);"
+        "mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);setColorAt/getColorAt；勿 geometry.setAttribute('instanceColor'…)。"
+        "每帧矩阵：独立 Matrix4 接 getMatrixAt→decompose→Object3D→updateMatrix→setMatrixAt。"
+    )
+    return f"""编写 Three.js **r160** 展陈脚本（仅 JS；canvas 挂 document.getElementById('canvas-container')）。
+
+风格：{style}
+概念：{concept}
+主技术：{technique}
+{crit if crit else ''}
+
+【形式】落实主技术；≥2 类几何（InstancedMesh/Points/LineSegments/Mesh 至少两类）；禁「单球点云慢转」惰性套路。
+【动画】const t=performance.now()*0.001；可见运动项等效系数 ≥0.01（相机缓移约 0.04–0.12，体/粒子 0.5–2.0）。
+【观感】ACESFilmicToneMapping、toneMappingExposure≥1.2；Ambient≥0.3+另有点/方向光≥0.8；背景勿纯黑。雾优先 null；FogExp2 density≤0.018、禁≥0.03；动雾振幅≤0.003。
+【色彩】animate 至少一处 setHSL（color 或 emissive）。
+【工程】无 import/export/HTML；禁 OrbitControls/Loader/EffectComposer；禁指针/滚轮/键盘监听。若拆成多个 for 更新几何，每个 for 内须声明本循环用到的参数（如沿闭合曲线的角 u），禁止在仅另一 for 内声明过的块外引用。
+【r160】renderer.outputColorSpace=THREE.SRGBColorSpace；禁 outputEncoding/旧 Encoding；禁 Geometry/Face3；禁止 THREE.TorusKnot 类（用 TorusKnotGeometry+曲线参数）。
+【实例】{inst}
+【材质】主 MeshStandard；Physical+实例色则 sheen=0；Color 用 new THREE.Color / setHex。
+【限额】Points≤4000；单 InstancedMesh≤1200、合计≤2500；勿多套海量系统叠罗汉。
+【注释】禁 /* */ 与中文长说明；// 全程≤3 条。
+{seed}
+{inherit}
+仅输出一个 ```javascript … ``` 代码块。"""
+
+
+def _compose_judge_prompt_compact(
+    *,
+    concept80: str,
+    visual80: str,
+    code_summary: str,
+) -> str:
+    return f"""你是 Judge：合并代码扫视（文本）+ 艺术打分。勿回写代码。
+
+【代码】1–2 句：OrbitControls/Loader/ShaderMaterial/Geometry/outputEncoding/交互监听/实例色+Physical+sheen 风险；无则写「代码结构健康」。
+【艺术】宽容看展陈潜力；有动效/光影/构成/氛围之一即可。
+概念：{concept80}
+视觉：{visual80}
+{code_summary}
+
+评分：8.5+ 展陈级；7–8 勿硬压到 6；5–6 仅严重空壳/脱节。
+publish_ready：≥7 倾向 true（非灰盒）；≥7.5 默认 true；≥8 应当 true；<6.5 或 6.5–6.9 且确认空壳则 false。勿因少粒子或未写 setHSL 判 false。
+
+JSON：review_comments、total_score、conclusion、strengths、suggestions、publish_ready、next_iteration_focus。
+```json
+{{
+    "review_comments": "…",
+    "total_score": 7.5,
+    "conclusion": "…",
+    "strengths": ["…"],
+    "suggestions": ["…"],
+    "publish_ready": false,
+    "next_iteration_focus": "…"
+}}
+```"""
+
+
+def _compose_fixer_prompt_compact(*, error: str, code: str) -> str:
+    return f"""JS 仅语法修复（等价 new Function(code)），勿为 WebGL 运行时大改场景。
+
+错误：
+{error}
+
+代码：
+```javascript
+{code}
+```
+
+补全括号/引号/模板字符串/注释；删 import/export；保留 animate+resize；THREE 全局、domElement→canvas-container。可补 instanceColor+DynamicDrawUsage。输出完整 ```javascript … ```。"""
+
+
 def _normalize_model_name(raw: str) -> str:
     """Strip litellm-style 'gemini/' prefix so langchain-google-genai gets a clean model id."""
     name = raw.strip()
     if name.startswith("gemini/"):
         name = name[len("gemini/"):]
     return name
+
+
+# --------------- JSON extraction / repair ---------------
+# LLM 返回的 JSON 常见毛病：尾逗号、// 与 /* */ 注释、解释文本包裹、嵌套大括号。
+# 这组工具做「多路抽取 → 轻量修复 → json.loads」的三段式解析，避免原先 find/rfind
+# + 单正则的方式在嵌套/解释文本场景下整段失败。
+
+
+def _strip_json_comments(s: str) -> str:
+    """删掉 // 与 /* */ 注释，字符串内的 // 保留。用字符级扫描，同时尊重转义。"""
+    out = []
+    i, n = 0, len(s)
+    in_str = False
+    str_ch = ""
+    while i < n:
+        ch = s[i]
+        if in_str:
+            if ch == "\\" and i + 1 < n:
+                out.append(ch)
+                out.append(s[i + 1])
+                i += 2
+                continue
+            if ch == str_ch:
+                in_str = False
+            out.append(ch)
+            i += 1
+            continue
+        if ch in ('"', "'"):
+            in_str = True
+            str_ch = ch
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n:
+            nxt = s[i + 1]
+            if nxt == "/":
+                while i < n and s[i] != "\n":
+                    i += 1
+                continue
+            if nxt == "*":
+                i += 2
+                while i + 1 < n and not (s[i] == "*" and s[i + 1] == "/"):
+                    i += 1
+                i = min(i + 2, n)
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _scan_brace_block(text: str, start: int) -> str | None:
+    """从 text[start] == '{' 开始扫描一个顶层平衡大括号块，字符串内的 { } 被忽略。"""
+    n = len(text)
+    depth = 0
+    in_str = False
+    str_ch = ""
+    j = start
+    while j < n:
+        ch = text[j]
+        if in_str:
+            if ch == "\\" and j + 1 < n:
+                j += 2
+                continue
+            if ch == str_ch:
+                in_str = False
+            j += 1
+            continue
+        if ch in ('"', "'"):
+            in_str = True
+            str_ch = ch
+            j += 1
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:j + 1]
+        j += 1
+    return None
+
+
+def _iter_json_candidates(text: str):
+    """按优先级产出候选 JSON 文本片段。"""
+    if not text:
+        return
+
+    # 1) ```json ... ``` 代码块（优先）
+    for m in re.finditer(r"```json\s*\n?(.*?)\n?```", text, re.DOTALL | re.IGNORECASE):
+        yield m.group(1).strip()
+
+    # 2) 任意 ``` ... ``` 代码块里形如 { ... } 的内容
+    for m in re.finditer(r"```[a-zA-Z0-9_+-]*\s*\n?(.*?)\n?```", text, re.DOTALL):
+        content = m.group(1).strip()
+        if content.startswith("{") and content.endswith("}"):
+            yield content
+
+    # 3) 顶层平衡大括号扫描（最长优先，兼容嵌套 + 字符串含大括号）
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] == "{":
+            block = _scan_brace_block(text, i)
+            if block:
+                yield block
+                i += len(block)
+                continue
+        i += 1
+
+    # 4) 整段 strip 后是 { ... } 的朴素情况
+    stripped = text.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        yield stripped
+
+
+def _repair_json_candidate(s: str) -> str:
+    """轻量修复：BOM、注释、尾逗号。保持字符串内容不变。"""
+    if not s:
+        return s
+    s = s.lstrip("\ufeff").strip()
+    s = _strip_json_comments(s)
+    # 尾逗号：},] 前的逗号
+    s = re.sub(r",(\s*[}\]])", r"\1", s)
+    return s
+
+
+def _try_json_loads(candidate: str):
+    """尝试 raw + 修复两遍 json.loads。成功返回 dict/list；失败返回 None。"""
+    if not candidate:
+        return None
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    repaired = _repair_json_candidate(candidate)
+    if repaired and repaired != candidate:
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 _log_lock = threading.Lock()
@@ -177,9 +407,9 @@ class FullOrchestrator:
         self._on_event = on_event
         self._graph = self._build_graph()
 
-    def _emit(self, agent: str, phase: str, iteration: int, summary: str = ""):
+    def _emit(self, agent: str, phase: str, iteration: int, summary: str = "", **kwargs):
         if self._on_event:
-            self._on_event(agent, phase, iteration, summary)
+            self._on_event(agent, phase, iteration, summary, **kwargs)
 
     # ---- graph construction ----
 
@@ -207,35 +437,150 @@ class FullOrchestrator:
 
     # ---- LLM helper ----
 
-    def _llm_call(self, prompt: str, *, code_mode: bool = False) -> str:
+    @staticmethod
+    def _sanitize_code_preview(raw: str, max_len: int) -> str:
+        """流式 SSE 用尾部片段：脱敏 + 控长（不保证仍是合法 JS）。"""
+        if not raw or max_len < 8:
+            return ""
+        tail = raw[-max_len:]
+        # API / 密钥形态
+        tail = re.sub(r"AIza[0-9A-Za-z_-]{24,}", "AIza[REDACTED]", tail)
+        tail = re.sub(r"sk-[A-Za-z0-9_-]{12,}", "sk-[REDACTED]", tail)
+        tail = re.sub(
+            r"(?i)(api[_-]?key|secret|token|password|authorization)\s*[:=]\s*[\"']?[^\s\"']{6,}",
+            r"\1=[REDACTED]",
+            tail,
+        )
+        tail = re.sub(r"-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END", "[PEM REDACTED]", tail)
+        # 控制字符（保留换行制表）
+        tail = "".join(ch if ch in "\n\t\r" or ord(ch) >= 32 else " " for ch in tail)
+        return tail.rstrip()
+
+    @staticmethod
+    def _stream_chunk_text(chunk) -> str:
+        """将 LangChain 流式 chunk 的 content 规范为字符串（兼容 str / list[dict]）。"""
+        c = getattr(chunk, "content", None)
+        if c is None:
+            return ""
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            out: list[str] = []
+            for p in c:
+                if isinstance(p, str):
+                    out.append(p)
+                elif isinstance(p, dict):
+                    t = p.get("text")
+                    if t:
+                        out.append(str(t))
+                elif hasattr(p, "text"):
+                    out.append(str(p.text))
+            return "".join(out)
+        return str(c)
+
+    def _llm_call(
+        self,
+        prompt: str,
+        *,
+        code_mode: bool = False,
+        stream_iteration: int | None = None,
+        stream_agent: str | None = None,
+    ) -> str:
         llm = self.llm_code if code_mode else self.llm
+
+        want_stream = (
+            code_mode
+            and stream_iteration is not None
+            and stream_agent
+            and os.getenv("AGENTSART_CODE_STREAM", "0").strip().lower() in ("1", "true", "yes", "on")
+        )
+        if want_stream:
+            min_chars = max(200, int(os.getenv("AGENTSART_CODE_STREAM_CHARS", "900")))
+            min_interval = max(0.12, float(os.getenv("AGENTSART_CODE_STREAM_INTERVAL_SEC", "0.35")))
+            prev_max = max(60, int(os.getenv("AGENTSART_CODE_STREAM_PREVIEW_CHARS", "220")))
+            parts: list[str] = []
+            last_emit_n = 0
+            last_emit_t = 0.0
+            try:
+                for chunk in llm.stream([HumanMessage(content=prompt)]):
+                    t = self._stream_chunk_text(chunk)
+                    if t:
+                        parts.append(t)
+                    n = sum(len(x) for x in parts)
+                    now = time.monotonic()
+                    if (
+                        self._on_event
+                        and n - last_emit_n >= min_chars
+                        and now - last_emit_t >= min_interval
+                    ):
+                        acc = "".join(parts)
+                        pv = self._sanitize_code_preview(acc, prev_max)
+                        self._on_event(
+                            stream_agent,
+                            "stream",
+                            stream_iteration,
+                            f"{n} chars",
+                            preview=pv or None,
+                        )
+                        last_emit_n = n
+                        last_emit_t = now
+                text = "".join(parts)
+                if self._on_event and text and len(text) != last_emit_n:
+                    pv = self._sanitize_code_preview(text, prev_max)
+                    self._on_event(
+                        stream_agent,
+                        "stream",
+                        stream_iteration,
+                        f"{len(text)} chars",
+                        preview=pv or None,
+                    )
+                if text.strip():
+                    return text
+                print("   ⚠️ 流式返回为空，回退同步 invoke")
+            except Exception as ex:
+                print(f"   ⚠️ 代码流式输出异常，回退同步 invoke：{ex}")
+
         resp = llm.invoke([HumanMessage(content=prompt)])
-        return resp.content or ""
+        c = getattr(resp, "content", None)
+        if isinstance(c, str):
+            return c or ""
+        if isinstance(c, list):
+            return self._stream_chunk_text(resp) or ""
+        return str(c) if c is not None else ""
 
     # ---- JSON / code parsers (unchanged) ----
 
     def _parse_json(self, text: str) -> dict:
-        match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except Exception as e:
-                print(f"\n   [警告] JSON 代码块解析失败: {e}")
+        """多路抽取 + 轻量修复的 JSON 解析：
+        1) ```json 代码块 → 2) 任意代码块 → 3) 顶层平衡大括号 → 4) 整段。
+        每个候选都尝试 raw + 去注释/去尾逗号两遍 json.loads。
+        最终失败时保留 JS 代码块回退（Director/Visual 误把 JS 贴到 JSON 槽的情况）。
+        """
+        if not text:
+            print("\n   [警告] JSON 解析输入为空")
+            return {}
 
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        if start >= 0 and end > start:
-            try:
-                return json.loads(text[start:end])
-            except Exception as e:
-                print(f"\n   [警告] 提取花括号内容解析失败: {e}")
+        last_err_sample = ""
+        for candidate in _iter_json_candidates(text):
+            parsed = _try_json_loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, list):
+                # 极少见：LLM 输出了数组。包一层 dict 避免下游 .get 崩。
+                return {"items": parsed}
+            if not last_err_sample:
+                last_err_sample = candidate[:120]
 
         js_match = re.search(r'```(?:javascript|js)\s*(.*?)\s*```', text, re.DOTALL)
         if js_match:
             print("\n   [恢复] JSON 解析失败，但成功从 Markdown 中提取到了代码块")
             return {"threejs_code": js_match.group(1).strip()}
 
-        print(f"\n   [警告] AI 没有返回合法的 JSON！截取前 100 个字符: {text[:100]}...")
+        print(
+            f"\n   [警告] AI 没有返回合法的 JSON！已尝试多路抽取均失败。"
+            f"\n     最后候选片段: {last_err_sample[:120]}"
+            f"\n     原始前 120 字符: {text[:120]}"
+        )
         return {}
 
     def _extract_js_code(self, text: str) -> str:
@@ -379,7 +724,10 @@ class FullOrchestrator:
         code = (state.get("reviewer") or state.get("builder") or {}).get("threejs_code", "")
         error = state.get("syntax_error", "")
 
-        prompt = f"""以下代码在 **JavaScript 解析阶段**校验失败（等价于用 `new Function(code)` 做语法检查）。你的任务是把它修到 **能通过解析**，不是排查 WebGL 运行时问题。
+        if _compact_prompts_enabled():
+            prompt = _compose_fixer_prompt_compact(error=error, code=code)
+        else:
+            prompt = f"""以下代码在 **JavaScript 解析阶段**校验失败（等价于用 `new Function(code)` 做语法检查）。你的任务是把它修到 **能通过解析**，不是排查 WebGL 运行时问题。
 
 【校验失败信息（来自 Node 解析或括号扫描）】
 {error}
@@ -404,7 +752,7 @@ class FullOrchestrator:
 - 不要使用 `import` / `export`；不要写 `<script>` 或 HTML。
 - 避免把 **Markdown 反引号或说明文字** 粘进 JS 字符串外。"""
 
-        raw = self._llm_call(prompt, code_mode=True)
+        raw = self._llm_call(prompt, code_mode=True, stream_iteration=iteration, stream_agent="fixer")
         fixed = _clamp_animation_speeds_in_js(self._coerce_llm_js_response(raw, code))
 
         result = dict(state.get("reviewer") or state.get("builder") or {})
@@ -427,13 +775,13 @@ class FullOrchestrator:
         face_influence = state.get("face_influence", "")
         prev_concept = state.get("prev_concept", "")
 
-        print("🎬 [1/6] 创意总监...")
+        print("🎬 [1/6] 创意总监 · 合并叙事策划...")
         self._emit("director", "start", iteration)
 
         if face_influence:
             influence_prompt = f"""
 【外部观察者 / 现场观众（重要！）】
-系统刚刚完成一次**摄像头侧写**，「AgentsArt-X」风格的分析简报如下（含可供看板展示的**创作关键词**行，观众会看到这一总结）：
+系统刚刚完成一次**摄像头侧写**，「幻棱」侧写引擎的分析简报如下（含可供看板展示的**创作关键词**行，观众会看到这一总结）：
 "{face_influence}"
 
 你必须同时完成两件事：
@@ -463,54 +811,61 @@ class FullOrchestrator:
 只需回应本迭代编号与主题，不要假设存在上一代作品。
 """
 
-        prompt = f"""定义第{iteration}次迭代的艺术方向。
+        prompt = f"""同时扮演【创意总监】与【叙事策划】，一次性产出第{iteration}次迭代的艺术方向与展陈文案。
 
 主题："AI 降临对人世的影响"
+
+## 创意总监部分
 【核心要求】：必须是高度抽象（Abstract）、结构复杂（Complex）且极具前卫艺术感的表达！绝对不要具象化或任何现实主义的场景。
 【形式与谱系】在抽象前提下主动**拉开套路**：`theme_focus` 或 `visual_requirements` 里须体现可归类的**形式气质**（不必照抄措辞）——例如：生成艺术式秩序、极简场域、混沌与秩序对位、有机抽象、晶体/网格仪式、数据诗学、动态雕塑感、声可视化式律动、单色冥想场、霓虹撞色剧场、故障修辞（仅用几何/闪烁表达，禁止 UI/HUD）。至少有一条 `visual_requirements` **明确指向形态类别**（线场 / 粒子场 / 体块阵列 / 曲线族 / 层叠薄片 / 单表皮呼吸等之一）。
 {influence_prompt}
 {director_tail}
 
-请输出 JSON 格式：
+## 叙事策划部分
+偏**展陈大屏**语态：`title` 远看可读，`description` 小字有诗意，`overlay_text` 如诗行/展览标签。三字段须与上面 `concept` / `theme_focus` 的气质**一致咬合**，不要另起炉灶；避免口语与说明书腔。
+
+请输出 JSON 格式（所有字段一次性输出，不要分段）：
 ```json
 {{
     "concept": "核心概念描述（100 字内）",
     "theme_focus": "主题焦点（可含形式气质关键词）",
-    "visual_requirements": ["要求 1（建议含主形态倾向）", "要求 2", "要求 3"]
-}}
-```"""
-
-        result = self._parse_json(self._llm_call(prompt))
-        print(f"   ✓ 概念：{result.get('concept', '')[:50]}...")
-        self._update_log(iteration, result)
-        self._emit("director", "done", iteration, result.get('concept', '')[:80])
-        return {"director": result}
-
-    def _node_narrative(self, state: PipelineState) -> dict:
-        iteration = state["iteration"]
-        result1 = state.get("director", {})
-
-        print("📖 [2/6] 叙事策划...")
-        self._emit("narrative", "start", iteration)
-
-        prompt = f"""基于以下创意方向构建叙事（偏**展陈大屏**：标题远看可读，小字有诗意）：
-创意概念：{result1.get('concept', '')}
-主题焦点：{result1.get('theme_focus', '')}
-
-请输出 JSON 格式：
-```json
-{{
+    "visual_requirements": ["要求 1（建议含主形态倾向）", "要求 2", "要求 3"],
     "title": "English Title | 中文标题（可有副标气质，勿过长）",
     "description": "English description | 中文描述（各约 40 字内；可一格一词概括展陈副标）",
     "overlay_text": "English overlay | 中文悬浮文字（如诗行/展览标签，忌口语与说明书腔）"
 }}
 ```"""
 
-        result = self._parse_json(self._llm_call(prompt))
-        print(f"   ✓ 标题：{result.get('title', '')}")
-        self._update_log(iteration, result1, result)
-        self._emit("narrative", "done", iteration, result.get('title', '')[:80])
-        return {"narrative": result}
+        combined = self._parse_json(self._llm_call(prompt))
+        director_result = {
+            "concept": combined.get("concept", ""),
+            "theme_focus": combined.get("theme_focus", ""),
+            "visual_requirements": combined.get("visual_requirements", []),
+        }
+        narrative_result = {
+            "title": combined.get("title", ""),
+            "description": combined.get("description", ""),
+            "overlay_text": combined.get("overlay_text", ""),
+        }
+        print(f"   ✓ 概念：{director_result.get('concept', '')[:50]}...")
+        print(f"   ✓ 标题：{narrative_result.get('title', '')}")
+        self._update_log(iteration, director_result, narrative_result)
+        self._emit("director", "done", iteration, director_result.get('concept', '')[:80])
+        return {"director": director_result, "narrative": narrative_result}
+
+    def _node_narrative(self, state: PipelineState) -> dict:
+        iteration = state["iteration"]
+        narrative = state.get("narrative", {}) or {}
+        title = narrative.get("title", "")
+
+        # Combined with director — this node stays in the graph purely to emit
+        # dashboard events so the "叙事策划" card still lights up on B screen.
+        print("📖 [2/6] 叙事策划（与创意总监合议完成，镜像事件）...")
+        self._emit("narrative", "start", iteration)
+        time.sleep(0.6)
+        print(f"   ✓ 标题：{title}")
+        self._emit("narrative", "done", iteration, title[:80])
+        return {}
 
     def _node_visual(self, state: PipelineState) -> dict:
         iteration = state["iteration"]
@@ -529,7 +884,7 @@ class FullOrchestrator:
    - 拓扑/分形感：莫比乌斯/克莱因参数化片段、迭代细分形、折纸式折痕动画
    - 动态线框与剖分：嵌套 Wireframe、神经过线、 Voronoi 风格剖分（程序化近似）
    - 流体/群集**拟象**：用粒子或线条的宏观规则模拟「卷吸、涡旋、鸟群转向」（不必物理精确）
-   - 光与材质戏剧：强 emissive、冷暖多点光、磷光边、雾中剪影（禁止真实 HDRI）
+   - 光与材质戏剧：强 emissive、冷暖多点光、磷光边、远近明暗剪影（禁止真实 HDRI；勿依赖厚雾糊场）
    - 数字浮雕/层叠：半透明片层前后漂移，形成纵深感（片数勿贪多）
    - 故障修辞：几何抖动、双色分裂、断续闪烁（禁止 mimicking 操作系统界面）"""
             visual_extra = f"""
@@ -555,7 +910,7 @@ class FullOrchestrator:
 叙事：{result2.get('title') or result1.get('theme_focus', '')}
 
 【视觉进化要求】
-1. 警告：绝对禁止出现任何现实世界的背景、环境贴图（如公园、房间等真实 HDRI）或具象物体！背景应为算法生成的抽象空间或**富有色彩层次的渐变/纯色**——**不要总是使用接近纯黑的背景**，允许深蓝、靛紫、暗绿、深红、炭灰等**有明度的暗色调**，让前景元素有足够的对比度和辨识度。
+1. 警告：绝对禁止出现任何现实世界的背景、环境贴图（如公园、房间等真实 HDRI）或具象物体！背景应为算法生成的抽象空间或**富有色彩层次的渐变/纯色**——**不要总是使用接近纯黑的背景**，允许深蓝、靛紫、暗绿、深红、炭灰等**有明度的暗色调**，让前景元素有足够的对比度和辨识度。**大气透视**：优先靠明暗、色相层次与粒子渐隐表达纵深；若不用雾，可完全不设 `scene.fog`。
 {visual_style_line}
 {visual_extra}
 
@@ -604,7 +959,17 @@ class FullOrchestrator:
 
         technique = result3.get('rendering_technique', '粒子或几何体')
 
-        prompt = f"""编写基于 Three.js 的生成艺术代码。
+        if _compact_prompts_enabled():
+            prompt = _compose_builder_prompt_compact(
+                technique=technique,
+                style=result3.get("visual_style_summary", "") or "",
+                concept=result1.get("concept", "") or "",
+                critic_block=critic_block,
+                use_chain=use_chain,
+                prev_code=prev_code,
+            )
+        else:
+            prompt = f"""编写基于 Three.js 的生成艺术代码。
 
 视觉风格：{result3.get('visual_style_summary', '')}
 概念：{result1.get('concept', '')}
@@ -614,12 +979,13 @@ class FullOrchestrator:
 2. **动画呼吸感**（⚠️ 最常见致命错误：速度常数太小导致画面看似完全静止）：
    设 `const t = performance.now() * 0.001`（单位：秒），则：
    ① 快层（周期 2–8 s，speed 系数 `0.8 ~ 3.0`）：如 `Math.sin(t * 1.2 + phase)`、`Math.cos(t * 2.5)`。用于几何自转、emissive 脉冲、粒子色彩闪烁。
-   ② 慢层（周期 30–90 s，speed 系数 `0.02 ~ 0.2`）：如 `camera.position.x = R * Math.cos(t * 0.07)`。用于相机漂移、全局色温缓移、雾密度呼吸。
+   ② 慢层（周期 30–90 s，speed 系数 `0.02 ~ 0.2`）：如 `camera.position.x = R * Math.cos(t * 0.07)`。用于相机漂移、全局色温缓移、**背景色**或 emissive 的极缓呼吸；**勿**把 `FogExp2.density` 拉到肉眼「灰幕」级别（若动雾，振幅 ≤ 0.003）。
    **校验公式**：周期 T = 2π / speed ≈ 6.28 / speed。speed=0.001 → T=6280 秒 ≈ **永远看不到变化**。**任何动画参数 speed < 0.01 都是错误的**——肉眼完全无法感知。相机轨道 speed 推荐 `0.04–0.12`，实例运动 speed 推荐 `0.5–2.0`。
 3. **画面亮度**：`renderer.toneMapping = THREE.ACESFilmicToneMapping`，`toneMappingExposure >= 1.2`；至少一盏 AmbientLight 强度 >= 0.3 + 一盏方向/点光强度 >= 0.8；`scene.background` 避免纯黑，推荐 HSL 中 L >= 8%。
-4. **追求结构复杂度与前卫感**：多层叠加、空间编织、参数曲线缠绕、分形细分、拓扑变形、吸引子轨迹等。让代码本身成为算法艺术品，不是技术 demo。
-5. **多层视觉系统**：场景中至少 2 种不同几何体类型（如 InstancedMesh + Points、Mesh + LineSegments、大 Mesh + 围绕粒子群等），且各层使用**不同材质参数与色相**。严禁全场只有一个孤零零的单色物体——即使概念是"极简"，也需至少有主体 + 背景粒子/线条/光晕等辅助层。
-6. **色彩动态**：animate 中必须有至少一处 `.color.setHSL()` 或 `.emissive.setHSL()` 随时间变化（哪怕幅度极小如 hue ±0.02）。纯单色静态着色 = 失败。
+4. **雾与空气感（避免「灰雾糊墙」）**：无明确「浓雾/霾」叙事时**优先 `scene.fog = null`**，仅靠背景色与光照塑造空间。若使用 `FogExp2`，**密度 ≤ 0.018**（推荐 **0.008～0.015**）；**禁止** `0.03` 及以上或每帧把密度推到发灰。`THREE.Fog` 线性雾须保证 **`far` 明显大于**主体分布半径（远处仍留结构，不要近裁切糊成一团）。
+5. **追求结构复杂度与前卫感**：多层叠加、空间编织、参数曲线缠绕、分形细分、拓扑变形、吸引子轨迹等。让代码本身成为算法艺术品，不是技术 demo。
+6. **多层视觉系统**：场景中至少 2 种不同几何体类型（如 InstancedMesh + Points、Mesh + LineSegments、大 Mesh + 围绕粒子群等），且各层使用**不同材质参数与色相**。严禁全场只有一个孤零零的单色物体——即使概念是"极简"，也需至少有主体 + 背景粒子/线条/光晕等辅助层。
+7. **色彩动态**：animate 中必须有至少一处 `.color.setHSL()` 或 `.emissive.setHSL()` 随时间变化（哪怕幅度极小如 hue ±0.02）。纯单色静态着色 = 失败。
 {critic_block}{_technique_seed(technique)}
 {_build_code_inherit_block(use_chain, prev_code)}
 
@@ -631,6 +997,7 @@ class FullOrchestrator:
 - 零外部依赖：禁止 OrbitControls、任何 Loader（GLTF/Font/Texture/Cube）、EffectComposer。
 - 禁止用户交互（mousemove / pointermove / touch / wheel / keydown），纯自动演化。
 - 所有数据**程序化生成**（for / while + Math），禁止硬编码超长数组。
+- **注释最小化**：禁止任何 `/* ... */` 块注释与中文解说；`//` 行内注释仅在**不可替代**处（如罕见算法参考、WebGL 坑位提醒）使用，整段代码合计不超过 **3 条**。不要写章节横幅（`// ============ 场景初始化 ============`）、步骤编号（`// 1. 创建场景`）或重述代码作用的行尾注释。清晰命名优先，评审质量完全不依赖注释。
 
 【性能上限】
 - Points 粒子 ≤ 4000；单 InstancedMesh ≤ 1200，全部 InstancedMesh 合计 ≤ 2500。
@@ -645,13 +1012,14 @@ class FullOrchestrator:
 - 非 Instanced、单体 Mesh 使用 `MeshPhysicalMaterial` 时：`sheen` 为 **0～1 数值**；`sheenColor` 用 `new THREE.Color()`。**禁止**把 `THREE.Color` 赋给 `sheen`。尽量不要用 `transmission`+`thickness` 薄玻璃栈（易与光照不匹配）；非需要时不要设 `thickness`。
 - **禁止** `renderer.outputEncoding`、`THREE.sRGBEncoding`、`THREE.LinearEncoding` 等已移除 API；统一用 `renderer.outputColorSpace = THREE.SRGBColorSpace`。
 - 对 `sheenColor`、`clearcoatNormalMap` 等调用 `.copy`/`.setHex` 前，确认材质实例上该属性存在。
-- **InstancedMesh 每帧 `setColorAt`**：须在首帧前创建 `instanceColor`（`new THREE.InstancedBufferAttribute(new Float32Array(count*3), 3)`）并 `setUsage(THREE.DynamicDrawUsage)`，勿依赖首次 `setColorAt` 隐式创建（易在 WebGL2 上与 uniform 路径叠加出问题）。
+- **InstancedMesh 每帧 `setColorAt`**：须在首帧前创建 `instanceColor`（`new THREE.InstancedBufferAttribute(new Float32Array(count*3), 3)`）并 `setUsage(THREE.DynamicDrawUsage)`，勿依赖首次 `setColorAt` 隐式创建（易在 WebGL2 上与 uniform 路径叠加出问题）。`instanceColor` 必须赋给 **`mesh.instanceColor`**，勿用 `geometry.setAttribute('instanceColor', …)` 冒充实例色。读回颜色用 **`mesh.getColorAt(i, color)`**，禁止对 `InstancedBufferAttribute` 调用 `.get`（r160 无此 API）。
+- **InstancedMesh 每帧改矩阵**：`getMatrixAt(i, matrix)` 的 `matrix` 须为**单独的 `THREE.Matrix4()`**，再 `decompose` 到独立 `Vector3`/`Quaternion`/`Vector3`，赋值给 `Object3D` 后 `updateMatrix()`；**禁止**把 `dummy.matrix` 既当 `getMatrixAt` 写入目标又立刻 `dummy.matrix.decompose(...)`（易触发内部 `Matrix4.copy(undefined)` 类运行时错误）。
 - **版本对齐**：生成代码须与页内 **Three.js r160（three.min.js）** 一致；勿混用其它大版本的 API（升级/换 CDN 后常见「能编译、渲染期 uniform 崩」）。
 
 【输出格式】
 不要输出 JSON。将完整 Three.js 代码写在 ```javascript 和 ``` 之间。"""
 
-        raw = self._llm_call(prompt, code_mode=True)
+        raw = self._llm_call(prompt, code_mode=True, stream_iteration=iteration, stream_agent="builder")
         extracted_code = self._extract_js_code(raw)
         if not extracted_code:
             print("\n   [警告] Builder 未能生成合法的代码块，返回为空")
@@ -666,56 +1034,22 @@ class FullOrchestrator:
         iteration = state["iteration"]
         result4 = state.get("builder", {})
 
-        print("🔬 [5/6] 代码审查...")
+        # 深度复查已合并进 Judge（见 _node_critic）。此处仅做程序化预检：
+        # ① 克隆 Builder 代码到 reviewer 槽位，作为 syntax_guard / code_fixer 的修复目标；
+        # ② 对过小的 speed 赋值统一 clamp；
+        # ③ 发射 start/done 事件，让 dashboard 的「代码审查」卡片仍然亮起。
+        print("🔬 [5/6] 代码审查（程序化预检，深度复查合并至 Judge）...")
         self._emit("reviewer", "start", iteration)
 
-        prompt = f"""审查以下 Three.js 代码，**仅修复会导致运行时崩溃的致命错误**。
-
-【核心原则】你是安全网，不是重写者。如果代码能跑，**原样输出，不做任何修改**。
-**绝对不要**：削减粒子/实例数量、简化动画逻辑、移除视觉效果、改变艺术风格或构图。
-**保留所有创意复杂度**——即使代码看起来"太长"或"太复杂"，只要不崩溃就不动。
-
-仅检查以下项（存在才修，不存在跳过）：
-1. renderer.domElement 未添加到 'canvas-container' → 补上
-2. 缺少 animate() / requestAnimationFrame / renderer.render → 补上
-3. 使用了 OrbitControls / GLTFLoader 等未引入依赖 → 删除相关代码
-4. 使用了 ShaderMaterial / 自定义 GLSL → 替换为内置材质，将动画移至 JS 循环
-5. 使用了 THREE.Geometry / Face3 / fromGeometry → 改用 BufferGeometry + setAttribute；或使用了 `THREE.TorusKnot`（r160 已移除）→ 改为 `THREE.TorusKnotGeometry` / 按结线参数 `u` 手写采样点与切线
-6. 使用了 renderer.outputEncoding / sRGBEncoding / LinearEncoding → 删除，改为 renderer.outputColorSpace = THREE.SRGBColorSpace
-7. material.color / emissive 等误赋裸数字破坏 Color → 改为 `new THREE.Color()` / `.setHex()`；MeshPhysicalMaterial：`sheen` 应为数值，`sheenColor` 用 Color；勿把 Color 赋给 `sheen`；无薄玻璃需求时不要滥用 transmission/thickness
-8. 混入了 HTML / Markdown / `<script>` 标签 → 删除
-9. 明显语法错误：括号不匹配、变量未声明、代码被截断 → 补全闭合
-10. 交互监听（mousemove / pointermove / touch / wheel / keydown）→ 移除
-11. undefined 调用：对可能不存在的属性（sheenColor、clearcoatNormalMap 等）调用方法前加存在性判断
-12. InstancedMesh 使用 `setColorAt`（或 `vertexColors` + 每帧改实例色）→ 须预分配 `instanceColor`（`InstancedBufferAttribute`）+ `DynamicDrawUsage`。若同时 **`MeshPhysicalMaterial` + `sheen > 0`**（或显式 `sheenColor`/`sheenRoughness`）→ 改为 **`MeshStandardMaterial`**，或保留 Physical 时 **`sheen: 0`** 并去掉 sheen 色参（规避 WebGL2 上 `uniform3fv` / @@iterator 运行时错误）
-13. **动画速度过慢**（与流水线程序 clamp 互补）：若仍见 `*speed* = 0.0001` 这类肉眼不可见的值，在 LLM 侧改为合理常数；程序会在你输出后再次统一抬升过小的 speed 赋值。
-
-如果**没有发现任何崩溃问题**，直接输出原始代码不做任何修改。
-
-[待审查代码]
-{result4.get('threejs_code', '')}
-
-【输出格式】
-1. 审查结论（一句话：无问题 / 发现 N 个致命问题已修复）。
-2. 代码用 ```javascript 和 ``` 包裹（可以是原始代码的完整复制）。
-"""
-
-        raw = self._llm_call(prompt, code_mode=True)
-        fixed_code = self._extract_js_code(raw)
-        if fixed_code:
-            comments = re.sub(r'```.*?```', '', raw, flags=re.DOTALL).strip()
-            if not comments:
-                comments = "代码审查与修复已完成。"
-        else:
-            print("\n   [警告] Reviewer 未返回有效的修复代码，将安全回退使用 Builder 的原始代码")
-            fixed_code = result4.get('threejs_code', '')
-            comments = raw.strip()
-
-        fixed_code = _clamp_animation_speeds_in_js(fixed_code)
-        result = {"threejs_code": fixed_code, "review_comments": comments}
-        print("   ✓ 审查完毕")
-        review_brief = (comments or "")[:100].replace('\n', ' ')
-        self._emit("reviewer", "done", iteration, review_brief or "Code review complete")
+        builder_code = result4.get("threejs_code", "")
+        clamped = _clamp_animation_speeds_in_js(builder_code)
+        result = {
+            "threejs_code": clamped,
+            "review_comments": "程序化速度参数校准完成；深度复查已合并至 Judge。",
+        }
+        time.sleep(0.6)
+        print("   ✓ 预检完毕，交由 Judge 合议")
+        self._emit("reviewer", "done", iteration, "速度参数校准完成 · 交由 Judge 合议")
         self._update_log(
             iteration,
             state.get("director"), state.get("narrative"), state.get("visual"),
@@ -736,36 +1070,55 @@ class FullOrchestrator:
                          "LineSegments" in code or "Line(" in code,
                          "new THREE.Mesh" in code])
 
-        code_summary = f"代码统计：{code_len} 字符 | 几何体类型数：{geo_types} | 色彩动态(.setHSL)：{has_setHSL}"
+        code_summary = f"代码统计:{code_len} 字符 | 几何体类型数:{geo_types} | 色彩动态(.setHSL):{has_setHSL}"
 
-        print("🔍 [6/6] 艺术评审...")
+        print("🔍 [6/6] 艺术评审 · Judge 合议（合并 Reviewer 复查）...")
         self._emit("critic", "start", iteration)
 
-        prompt = f"""评审本次迭代作品。原则：**偏宽容、看整体可展陈潜力**，不要拿「美术馆终审」标准卡生成艺术；代码统计仅供参考，**勿**因缺 .setHSL 或几何体种类数少就压分。
+        if _compact_prompts_enabled():
+            prompt = _compose_judge_prompt_compact(
+                concept80=(result1.get("concept", "") or "")[:80],
+                visual80=(result3.get("visual_style_summary", "") or "")[:120],
+                code_summary=code_summary,
+            )
+        else:
+            prompt = f"""你是 Judge，合并原先 Reviewer 代码复查与 Critic 艺术评审两道流程，一次性产出两段输出。
 
+## 职责 1 · 代码复查（原 Reviewer）
+快速扫视代码，只产出「观察文本」——**不回写代码**（语法校验与 clamp 已由 syntax_guard / 程序化预检完成）。重点关注：
+- 依赖越界：OrbitControls / GLTFLoader / EffectComposer 等未引入依赖
+- 禁用 API：ShaderMaterial / RawShaderMaterial / THREE.Geometry / Face3 / 已移除的 outputEncoding / sRGBEncoding
+- 运行时风险：InstancedMesh 未预分配 instanceColor、MeshPhysicalMaterial + sheen > 0 与实例色同用、材质属性错误赋值、undefined 调用
+- 交互监听残留（mousemove / pointermove / keydown 等）
+- 动画速度残留极小值（程序已 clamp，通常无需复述）
+如无问题写「代码结构健康」。1~2 句即可，勿展开成长篇审查单。
+
+## 职责 2 · 艺术评审（原 Critic）
+原则：**偏宽容、看整体可展陈潜力**，不要拿「美术馆终审」标准卡生成艺术；代码统计仅供参考，**勿**因缺 .setHSL 或几何体种类数少就压分。
 1. 概念与画面气质是否大致咬合（允许执行粗糙）
-2. 是否至少有**一处**可感知亮点：动效、光影层次、独特点线面构成、色彩氛围其一即可
+2. 是否至少有**一处**可感知亮点:动效、光影层次、独特点线面构成、色彩氛围其一即可
 
-概念：{result1.get('concept', '')[:80]}
-视觉：{result3.get('visual_style_summary', '')}
+概念:{result1.get('concept', '')[:80]}
+视觉:{result3.get('visual_style_summary', '')}
 {code_summary}
 
-评分参考（整体分数**宁高勿低**，除非明确翻车）：
-- 8.5-10：有辨识度、能站住展陈；不必完美
-- 7.0-8.4：诚意够、能跑能看，有瑕疵也**正常给 7.5+**，勿因「不够前卫」硬压到 6 段
-- 5.0-6.9：明显套路空壳、几乎静止无设计、或与概念**严重**脱节才给这段
+评分参考（整体分数**宁高勿低**，除非明确翻车）:
+- 8.5-10:有辨识度、能站住展陈；不必完美
+- 7.0-8.4:诚意够、能跑能看，有瑕疵也**正常给 7.5+**，勿因「不够前卫」硬压到 6 段
+- 5.0-6.9:明显套路空壳、几乎静止无设计、或与概念**严重**脱节才给这段
 
-**publish_ready（再放宽）**：
-- `true`：**总分 ≥ 7.0** 即可倾向 `true`，只要**不是**纯占位几何 + 完全无动势/无氛围；**禁止**因「少一层粒子」「没写 setHSL」就判 `false`。
-- **总分 ≥ 7.5**：默认 `true`，除非有硬伤（严重跑题、像未完成的灰盒）。
-- **总分 ≥ 8.0**：**应当 `true`**，除非极个别硬伤。
-- `false`：仅当总分 **< 6.5**，或 **6.5–6.9** 且确认是套路空壳/严重脱节；**不要**因「还能再 polish」或「不够惊艳」判 `false`。
+**publish_ready（再放宽）**:
+- `true`:**总分 ≥ 7.0** 即可倾向 `true`，只要**不是**纯占位几何 + 完全无动势/无氛围；**禁止**因「少一层粒子」「没写 setHSL」就判 `false`。
+- **总分 ≥ 7.5**:默认 `true`，除非有硬伤（严重跑题、像未完成的灰盒）。
+- **总分 ≥ 8.0**:**应当 `true`**，除非极个别硬伤。
+- `false`:仅当总分 **< 6.5**，或 **6.5–6.9** 且确认是套路空壳/严重脱节；**不要**因「还能再 polish」或「不够惊艳」判 `false`。
 
-请输出 JSON 格式：
+## 输出 JSON（两段合一）
 ```json
 {{
+    "review_comments": "1~2 句代码层面观察，无问题写「代码结构健康」",
     "total_score": 7.5,
-    "conclusion": "（必填）1～3 句中文定论：是否达展陈标准、形式与概念是否咬合、最突出得失；勿只罗列优点。",
+    "conclusion": "（必填）1~3 句中文定论:是否达展陈标准、形式与概念是否咬合、最突出得失；勿只罗列优点。",
     "strengths": ["优点 1", "优点 2"],
     "suggestions": ["建议 1"],
     "publish_ready": false,
@@ -779,19 +1132,27 @@ class FullOrchestrator:
             result["conclusion"] = (
                 f"未返回完整结论文本。当前总分 {score_disp}/10，请结合 strengths、suggestions 理解评审意涵。"
             )
+
+        # Judge 也同时产出 review_comments —— 回写到 reviewer 状态槽，让 dashboard 的
+        # 「代码审查」时间线条目拿到真正的复查结论，而不是程序化预检的占位文本。
+        reviewer_state = dict(state.get("reviewer") or {})
+        judge_review = (result.get("review_comments") or "").strip()
+        if judge_review:
+            reviewer_state["review_comments"] = judge_review
+
         print(
-            f"   ✓ 评分：{result.get('total_score', 'N/A')}/10 — "
+            f"   ✓ 评分:{result.get('total_score', 'N/A')}/10 — "
             f"{(result.get('conclusion') or '')[:72]}{'…' if len((result.get('conclusion') or '')) > 72 else ''}"
         )
         self._update_log(
             iteration,
             state.get("director"), state.get("narrative"), state.get("visual"),
-            state.get("builder"), state.get("reviewer"), result,
+            state.get("builder"), reviewer_state, result,
         )
         conclusion = (result.get('conclusion') or '')[:80]
         score = result.get('total_score', 'N/A')
         self._emit("critic", "done", iteration, f"Score: {score}/10 — {conclusion}")
-        return {"critic": result}
+        return {"critic": result, "reviewer": reviewer_state}
 
     # ---- public entry point ----
 

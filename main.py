@@ -86,26 +86,55 @@ def _state_update(**kwargs):
 _agent_events: list[dict] = []
 _agent_events_lock = threading.Lock()
 _agent_event_counter = 0
+_current_iteration_agents: dict = {}
+_current_iteration_num: int | None = None
 
 
-def push_agent_event(agent: str, phase: str, iteration: int, summary: str = ""):
-    global _agent_event_counter
+def push_agent_event(
+    agent: str,
+    phase: str,
+    iteration: int,
+    summary: str = "",
+    *,
+    preview: str | None = None,
+):
+    global _agent_event_counter, _current_iteration_num
+    cap = int(os.getenv("AGENTSART_SSE_PREVIEW_CAP", "420"))
+    cap = max(80, min(cap, 2000))
+    pv = (preview or "").strip()
+    if pv:
+        pv = pv[:cap]
     with _agent_events_lock:
         _agent_event_counter += 1
-        _agent_events.append({
+        evt = {
             "id": _agent_event_counter,
             "agent": agent,
             "phase": phase,
             "iteration": iteration,
             "summary": summary,
             "ts": time.time(),
-        })
+        }
+        if pv:
+            evt["preview"] = pv
+        _agent_events.append(evt)
         if len(_agent_events) > 100:
             _agent_events[:] = _agent_events[-60:]
+        if iteration != _current_iteration_num:
+            _current_iteration_agents.clear()
+            _current_iteration_num = iteration
+        if phase in ("start", "done", "regen"):
+            _current_iteration_agents[agent] = {"phase": phase, "summary": summary, "ts": evt["ts"]}
 
 
-def _on_orchestrator_event(agent: str, phase: str, iteration: int, summary: str = ""):
-    push_agent_event(agent, phase, iteration, summary)
+def _on_orchestrator_event(
+    agent: str,
+    phase: str,
+    iteration: int,
+    summary: str = "",
+    *,
+    preview: str | None = None,
+):
+    push_agent_event(agent, phase, iteration, summary, preview=preview)
 
 
 # Shutdown event for graceful termination
@@ -219,6 +248,143 @@ app.add_middleware(CacheControlMiddleware)
 class ProcessFaceRequest(BaseModel):
     image: str
 
+# --- Face Analysis Preheat (P3: 方案 A) ---
+# 在 orchestrator 等待窗尾段提前触发 Gemini 分析，把分析延迟从迭代启动临界路径上挪走。
+# 单次调用计数不变（仍然 1 次/迭代），只是把分析往前挪 ~10s。
+_preheat_state = {
+    "lock": threading.Lock(),
+    "in_progress": False,
+    "face_hash": None,
+    "result": None,
+    "fetched_at": 0.0,
+    "done_event": threading.Event(),
+}
+
+
+def _face_img_hash(face_img: str | None) -> str | None:
+    if not face_img:
+        return None
+    return hashlib.sha256(face_img.encode("utf-8")).hexdigest()[:16]
+
+
+def _start_face_preheat(face_img: str, *, publish_to_state: bool = False, label: str = "face-preheat") -> None:
+    """单飞触发：只有未在运行且尚未为当前 face 缓存结果时才启动后台线程。
+
+    publish_to_state=True 时同步把结果写入 GLOBAL_STATE（dashboard 预分析路径），
+    适用于人入场即触发、无需等迭代启动的场景。
+    """
+    if not face_img:
+        return
+    fh = _face_img_hash(face_img)
+    with _preheat_state["lock"]:
+        if _preheat_state["in_progress"]:
+            return
+        if _preheat_state["face_hash"] == fh and _preheat_state["result"] is not None:
+            if publish_to_state:
+                cached = _preheat_state["result"]
+                threading.Thread(
+                    target=lambda: _publish_face_analysis_to_state(cached),
+                    daemon=True,
+                    name=f"{label}-republish",
+                ).start()
+            return
+        _preheat_state["in_progress"] = True
+        _preheat_state["face_hash"] = fh
+        _preheat_state["result"] = None
+        _preheat_state["fetched_at"] = 0.0
+        _preheat_state["done_event"] = threading.Event()
+        event_ref = _preheat_state["done_event"]
+
+    def _worker():
+        try:
+            print(f"🔥 人脸分析启动（{label}）…")
+            result = _run_face_analysis(face_img)
+        except Exception as e:
+            print(f"⚠️ {label} 分析异常：{e}")
+            result = None
+        with _preheat_state["lock"]:
+            still_current = _preheat_state["face_hash"] == fh
+            if still_current:
+                _preheat_state["result"] = result
+                _preheat_state["fetched_at"] = time.time()
+                _preheat_state["in_progress"] = False
+            event_ref.set()
+        if result is not None:
+            print(f"✅ {label} 分析完成")
+            if publish_to_state and still_current:
+                _publish_face_analysis_to_state(result)
+        elif publish_to_state and still_current:
+            _state_update(
+                face_analysis_status="error",
+                face_analysis_error="Gemini 分析未返回有效结果",
+            )
+        # 失败时勿长期占 slot（result=None + 同 hash），否则每轮迭代都命不中预热、重复打 Gemini
+        if still_current and result is None:
+            _clear_face_preheat()
+
+    threading.Thread(target=_worker, daemon=True, name=label).start()
+
+
+def _consume_face_preheat(face_img: str | None, wait_timeout: float = 5.0) -> dict | None:
+    """迭代启动前尝试命中预热结果。hash 不匹配或超时则回退同步分析。"""
+    if not face_img:
+        return None
+    fh = _face_img_hash(face_img)
+    with _preheat_state["lock"]:
+        in_progress = _preheat_state["in_progress"]
+        event = _preheat_state["done_event"]
+        matches = _preheat_state["face_hash"] == fh
+        cached = _preheat_state["result"] if matches else None
+
+    if cached is not None:
+        print("⚡ 命中预热分析结果，跳过同步 Gemini 调用")
+        _clear_face_preheat()
+        return cached
+
+    if in_progress and matches:
+        print(f"⏳ 预热分析进行中，最多等待 {wait_timeout:.0f}s…")
+        if event.wait(timeout=wait_timeout):
+            with _preheat_state["lock"]:
+                result = _preheat_state["result"] if _preheat_state["face_hash"] == fh else None
+            if result is not None:
+                print("⚡ 预热分析在等待窗内完成，命中")
+                _clear_face_preheat()
+                return result
+        print("⏱ 预热超时或失败，回退同步分析")
+    return None
+
+
+def _clear_face_preheat() -> None:
+    with _preheat_state["lock"]:
+        _preheat_state["face_hash"] = None
+        _preheat_state["result"] = None
+        _preheat_state["fetched_at"] = 0.0
+        _preheat_state["in_progress"] = False
+
+
+def _publish_face_analysis_to_state(result: dict | None) -> None:
+    """把一次 _run_face_analysis 的结果写进 GLOBAL_STATE，让 dashboard 立即可见。
+
+    与 orchestrator_loop 内的发布逻辑保持一致；subject_present=False 时退回空壳。
+    """
+    if not result:
+        return
+    if result.get("subject_present") is False:
+        _clear_human_observer_state()
+        return
+    keywords = result.get("creative_keywords") or []
+    kw_line = ("\n【创作关键词】" + "、".join(keywords)) if keywords else ""
+    _state_update(
+        human_director_brief=((result.get("director_influence") or "").strip() + kw_line),
+        last_analysis_report=result.get("summary"),
+        creative_keywords=keywords,
+        human_metrics=result.get("human_metrics") or {},
+        face_analysis_status="ready",
+        face_analysis_error=None,
+        timestamp=time.time(),
+    )
+
+
 # --- Orchestrator Background Loop ---
 def orchestrator_loop():
     print("="*60)
@@ -252,9 +418,15 @@ def orchestrator_loop():
                     face_img = None
 
             if face_img:
-                print("📷 发现缓存人脸截图，启动 Gemini 分析…")
-                _state_update(face_analysis_status="analyzing", face_analysis_error=None)
-                result = _run_face_analysis(face_img)
+                preheat_hit = _consume_face_preheat(face_img, wait_timeout=5.0)
+                if preheat_hit is not None:
+                    print("📷 使用预热分析结果（等待窗已并行完成）")
+                    _state_update(face_analysis_status="analyzing", face_analysis_error=None)
+                    result = preheat_hit
+                else:
+                    print("📷 发现缓存人脸截图，启动 Gemini 分析…")
+                    _state_update(face_analysis_status="analyzing", face_analysis_error=None)
+                    result = _run_face_analysis(face_img)
                 if result is not None and result.get("subject_present") is False:
                     print("📷 无可分析人脸：已清空服务端截图与人类分析（与画面无人一致）")
                     _clear_human_observer_state()
@@ -312,6 +484,9 @@ def orchestrator_loop():
                 # Check for shutdown frequently during sleep (every 0.5 seconds)
                 elapsed = 0
                 check_interval = 0.5
+                preheat_triggered = False
+                preheat_lead_sec = float(os.getenv("AGENTSART_FACE_PREHEAT_LEAD_SEC", "10"))
+                preheat_stale_sec = float(os.getenv("AGENTSART_FACE_STALE_SEC", "120"))
                 while elapsed < wait_seconds:
                     if shutdown_event.is_set():
                         print("🛑 收到关闭信号，立即停止等待")
@@ -319,6 +494,21 @@ def orchestrator_loop():
                     sleep_time = min(check_interval, wait_seconds - elapsed)
                     time.sleep(sleep_time)
                     elapsed += sleep_time
+
+                    remaining = wait_seconds - elapsed
+                    if (
+                        not preheat_triggered
+                        and preheat_lead_sec > 0
+                        and 0 < remaining <= preheat_lead_sec
+                    ):
+                        with _state_lock:
+                            pre_img = GLOBAL_STATE.get("last_face_image")
+                            pre_upload_at = GLOBAL_STATE.get("last_face_upload_at")
+                            if pre_upload_at and (time.time() - pre_upload_at) > preheat_stale_sec:
+                                pre_img = None
+                        if pre_img:
+                            _start_face_preheat(pre_img)
+                        preheat_triggered = True
 
         except Exception as e:
             print(f"❌ 多智能体循环出错：{e}")
@@ -609,7 +799,7 @@ def _run_face_analysis(image_b64: str) -> dict | None:
         director_influence = (director_influence or "").strip() or (summary or "")[:50]
         creative_keywords = _ensure_creative_keywords(raw_kw, summary, director_influence)
 
-        print(f"✅ 人脸分析完成（约 800 字叙述 + {len(creative_keywords)} 条创作关键词）")
+        print(f"✅ 人脸分析完成（约 1200 字叙述 + {len(creative_keywords)} 条创作关键词）")
         return {
             "subject_present": True,
             "summary": summary,
@@ -634,10 +824,36 @@ async def upload_face(req: ProcessFaceRequest):
     _state_update(last_face_image=image_b64, last_face_upload_at=time.time())
     return JSONResponse({"status": "ok"})
 
+
+@app.post("/analyze_face_preview", tags=["Core"])
+async def analyze_face_preview(req: ProcessFaceRequest):
+    """人确认入场后由 sensor 调用一次：立即在后台跑 Gemini 分析并写入 dashboard 状态。
+
+    结果同时进入 preheat 缓存，下一轮迭代 `_consume_face_preheat` 会直接命中，省一次调用。
+    """
+    image_b64 = req.image
+    if not image_b64:
+        raise HTTPException(status_code=400, detail="No image provided")
+    if len(image_b64) > MAX_FACE_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Image payload too large")
+    # 清空预热与 in_progress，避免「分析中」单飞锁挡住 OK 强制重采；旧线程完成后因 hash 已变不会覆盖新结果
+    _clear_face_preheat()
+    _state_update(
+        last_face_image=image_b64,
+        last_face_upload_at=time.time(),
+        face_analysis_status="analyzing",
+        face_analysis_error=None,
+    )
+    _start_face_preheat(image_b64, publish_to_state=True, label="face-preview")
+    print("👁 收到入场预览触发，已启动预分析（后台）")
+    return JSONResponse({"status": "ok", "face_analysis_status": "analyzing"})
+
+
 @app.post("/clear_presence", tags=["Core"])
 async def clear_presence():
     """画面内持续无人时由 sensor 调用：清空服务端截图与人类分析展示，看板回到待机自我介绍。"""
     _clear_human_observer_state()
+    _clear_face_preheat()
     print("🧹 已清空人类分析展示状态（画面内无人）")
     return JSONResponse({"status": "ok", "face_analysis_status": "idle"})
 
@@ -696,6 +912,9 @@ async def get_data():
     payload.pop("last_face_upload_at", None)
     payload["has_face_image"] = has_face
     payload["sensor_client_hints"] = build_sensor_client_hints()
+    with _agent_events_lock:
+        payload["current_iteration_agents"] = dict(_current_iteration_agents)
+        payload["current_iteration_num"] = _current_iteration_num
     return JSONResponse(content=payload)
 
 

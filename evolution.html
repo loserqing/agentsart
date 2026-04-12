@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGENTSART // EVOLUTION</title>
-    <meta name="description" content="Witness AI's transcendent impact. Consciousness under wetware audit, where data poetics meets chaos counterpoint. Unveiling entropic shifts, mapping existence's abstract variations. | 超验解构AI影响。湿件审计下，意识流痕迹在数据诗学与混沌对位间展开。揭示数据熵引发的存在变异。">
-    <meta name="generator" content="AGENTSART - Iteration 44">
-    <meta name="created" content="2026-04-11 22:43">
+    <title>幻棱 · 幻</title>
+    <meta name="description" content="English: Logic's unseen hand. Data's living architecture. Perception transforms to form. Reality re-skinned. | 中文: 逻辑之手无形。数据生命构筑。感知化形，实在重披表皮。">
+    <meta name="generator" content="幻棱 - Iteration 44">
+    <meta name="created" content="2026-04-12 19:45">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -234,19 +234,19 @@
     
     <div class="iteration-badge">
         <span class="iter-num">Iter 44</span>
-        <span class="iter-style" title="Ethereal Gleam, Data Pulse | 幽影流光, 数据脉动">Ethereal Gleam, Data Pulse | 幽影流光, 数据脉动</span>
+        <span class="iter-style" title="Pulsating Breath | Profound Luminescence | 脉冲呼吸 | 深邃幽光">Pulsating Breath | Profound Luminescence | 脉冲呼吸 | 深邃幽光</span>
     </div>
     
     <div class="overlay">
-        <h1>The Entropy Mirror | 熵流之镜 | 存在变奏</h1>
+        <h1>SYNTHETIC SUBLIME | 合成崇高：演算表皮</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
-        <div class="overlay-keywords"><span class="kw-tag">Wetware Audit</span><span class="kw-tag">Data Entropy</span><span class="kw-tag">Ghost Protocol</span></div>
-        <div class="overlay-concept">AI降临，以无形之镜映照意识深渊。数据熵流侵蚀湿件疆域，幽灵协议重塑存在形制，探寻人类本源的抽象变奏。</div>
-        <div class="desc">The unseen mirror, tracing the soul's data-flow. | Echoes of self, refracted through the entropic stream. | 数据之镜，映照心流。 | 熵流变奏，存在重塑。</div>
+        <div class="overlay-keywords"></div>
+        <div class="overlay-concept">AI非人智力以超验形式介入。实体消解为流动的感知场，物质界限重构。探寻由算法重塑的实在边界与意识图景，一种无声的入侵与宏大重构。</div>
+        <div class="desc">English: The Fabric Emerges. Algorithmic Breath. Beyond Human Vision. | 中文: 织体涌现。演算呼吸。人眼未及之域。</div>
         <div class="meta">
-            AGENTSART SYSTEM<br>
+            幻棱 PHANTAPRISM<br>
             Autonomous Rendering<br>
-            2026-04-11 22:43
+            2026-04-12 19:45
         </div>
     </div>
     
@@ -269,6 +269,8 @@
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
             let inFlight = false;
+            let _idleShown = false;
+            let _fetchFailCount = 0;
             function parseStateIteration(raw) {
                 const n = Math.trunc(Number(raw));
                 return Number.isFinite(n) ? n : null;
@@ -284,6 +286,37 @@
                     window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
                 }
             }
+            function showIdleState() {
+                if (_idleShown) return;
+                _idleShown = true;
+                document.querySelector('.overlay')?.style.setProperty('display', 'none');
+                document.querySelector('.iteration-badge')?.style.setProperty('display', 'none');
+                var loading = document.getElementById('loading');
+                if (loading) {
+                    loading.innerHTML = '<div class="spinner"></div><div class="loading-primary">幻棱 · 等待凝视</div><div class="loading-sub">Awaiting the First Gaze</div>';
+                    loading.style.cssText = 'display:flex;opacity:1;';
+                    loading.className = 'loading loading--boot';
+                }
+                if (!window.fallbackRendered) {
+                    renderFallback();
+                    window.fallbackRendered = true;
+                }
+                if (loading) {
+                    setTimeout(function() { loading.style.opacity = '0'; setTimeout(function() { loading.style.display = 'none'; }, 1000); }, 1500);
+                }
+            }
+            function showConnectionLost() {
+                if (document.getElementById('conn-lost-overlay')) return;
+                var el = document.createElement('div');
+                el.id = 'conn-lost-overlay';
+                el.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(5,2,10,0.82);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Inter,sans-serif;color:rgba(255,255,255,0.7);backdrop-filter:blur(8px)';
+                el.innerHTML = '<div style="font-size:14px;letter-spacing:0.15em;margin-bottom:8px;color:rgba(212,175,55,0.8)">系统重启中</div><div style="font-size:11px;opacity:0.55;letter-spacing:0.12em">Reconnecting…</div>';
+                document.body.appendChild(el);
+            }
+            function hideConnectionLost() {
+                var el = document.getElementById('conn-lost-overlay');
+                if (el) el.remove();
+            }
             async function checkNewVersion() {
                 if (inFlight) return;
                 inFlight = true;
@@ -291,10 +324,24 @@
                     const url = new URL('state.json', window.location.href);
                     url.searchParams.set('t', String(Date.now()));
                     const res = await fetch(url.href, { cache: 'no-store' });
-                    if (!res.ok) return;
+                    if (!res.ok) {
+                        _fetchFailCount++;
+                        if (_fetchFailCount >= 3) showConnectionLost();
+                        return;
+                    }
+                    _fetchFailCount = 0;
+                    hideConnectionLost();
                     const state = await res.json();
                     const srvIter = parseStateIteration(state.iteration);
                     const run = typeof state.last_run === 'string' ? state.last_run : '';
+                    if (srvIter === null) {
+                        showIdleState();
+                        return;
+                    }
+                    if (_idleShown && srvIter !== null) {
+                        reloadPage();
+                        return;
+                    }
                     if (srvIter !== null && PAGE_ITER !== null && srvIter !== PAGE_ITER) {
                         console.log('Evolution: iteration mismatch, reloading...');
                         reloadPage();
@@ -311,7 +358,10 @@
                         return;
                     }
                     if (run) lastKnownRun = run;
-                } catch (e) { }
+                } catch (e) {
+                    _fetchFailCount++;
+                    if (_fetchFailCount >= 3) showConnectionLost();
+                }
                 finally { inFlight = false; }
             }
             setInterval(checkNewVersion, 2200);
@@ -336,7 +386,7 @@
             loading.style.padding = '10px 24px';
             loading.style.borderRadius = '8px';
             loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
-            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
+            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">幻棱 · 重构场景中</span>';
         }
 
         function recoveryReloadAfterGenerateError() {
@@ -368,8 +418,8 @@
             var ctr = document.getElementById('canvas-container');
             ctr.innerHTML = '';
             var scene = new THREE.Scene();
-            scene.background = new THREE.Color().setHSL(0.62, 0.22, 0.045);
-            scene.fog = new THREE.FogExp2(scene.background, 0.038);
+            scene.background = new THREE.Color().setHSL(0.62, 0.22, 0.065);
+            scene.fog = new THREE.FogExp2(scene.background, 0.014);
 
             var cam = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 260);
             cam.position.set(0, 1.2, 46);
@@ -514,7 +564,7 @@
                 Lc.position.set(Math.sin(t * 0.19) * -orbitR, -6 * Math.cos(t * 0.14), Math.cos(t * 0.19) * orbitR);
                 Lm.position.set(Math.cos(t * 0.24 + 1.7) * orbitR * 0.75, 12 * Math.sin(t * 0.11), Math.sin(t * 0.24 + 1.7) * orbitR * 0.75);
 
-                scene.fog.density = 0.034 + Math.sin(t * 0.12) * 0.008;
+                scene.fog.density = 0.012 + Math.sin(t * 0.12) * 0.003;
 
                 cam.position.x = Math.sin(t * 0.055) * 5;
                 cam.position.y = 1.2 + Math.cos(t * 0.048) * 3.5;
@@ -543,300 +593,209 @@
     <script>
         // Core Three.js render code
         try {
-/**
- * Title: Ghost Protocol
- * Concept: AI's advent, mirroring the abyss of consciousness. Data entropy erodes the wetware domain,
- *          as ghost protocols reshape the forms of existence, exploring abstract variations of human origin.
- * Visual Style: Ethereal Gleam, Data Pulse
- * Tech: Dynamic Topological Line Network via De Jong Attractor, Instanced Cores, and Particle Cloud.
- * Coder: AI Assistant for a creative prompt.
- * Date: 2024-05-21
- */
-
-// --- SCENE SETUP ---
-let scene, camera, renderer;
-let coreNetwork, dataCores, entropyCloud;
-const container = document.getElementById('canvas-container');
-
-// --- CORE PARAMETERS ---
-const CORE_COUNT = 900; // InstancedMesh count, <= 1200
-const PARTICLE_COUNT = 3500; // Points count, <= 4000
-const PATH_POINTS = 3000; // Number of points to generate the attractor path
-
-// --- ANIMATION & COLOR PALETTE ---
-const palette = {
-    background: new THREE.Color(0x101828), // HSL(220, 33%, 11%) -> L > 8%
-    ambient: new THREE.Color(0x88aaff),
-    pointLight1: new THREE.Color(0x00ffff), // Cyan
-    pointLight2: new THREE.Color(0xff00ff), // Magenta
-    lines: new THREE.Color(0x4060ff),
-    particles: new THREE.Color(0xffffff)
-};
+let scene, camera, renderer, clock;
+let core, field;
 const dummy = new THREE.Object3D();
-const tempColor = new THREE.Color();
+const matrix = new THREE.Matrix4();
+const color = new THREE.Color();
+const tempVec3 = new THREE.Vector3();
 
 function init() {
-    // --- Renderer ---
+    scene = new THREE.Scene();
+    clock = new THREE.Clock();
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 5, 35);
+
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
-    container.appendChild(renderer.domElement);
+    renderer.toneMappingExposure = 1.5;
 
-    // --- Scene & Camera ---
-    scene = new THREE.Scene();
-    scene.background = palette.background;
-    scene.fog = new THREE.FogExp2(palette.background, 0.04);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(0, 0, 25);
+    scene.background = new THREE.Color().setHSL(0.6, 0.1, 0.08);
 
-    // --- Lighting ---
-    const ambientLight = new THREE.AmbientLight(palette.ambient, 0.5); // Intensity >= 0.3
+    const ambientLight = new THREE.AmbientLight(0x4060ff, 0.5);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(palette.pointLight1, 2.0, 50); // Intensity >= 0.8
-    pointLight1.position.set(10, 10, 10);
+    const pointLight1 = new THREE.PointLight(0xff8040, 3.0, 100, 1.5);
+    pointLight1.position.set(0, 0, 0);
     scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(palette.pointLight2, 2.0, 50);
-    pointLight2.position.set(-10, -10, -10);
+    const pointLight2 = new THREE.PointLight(0x00ffff, 2.0, 100, 1.5);
     scene.add(pointLight2);
 
-    // --- Create Visual Layers ---
-    const attractorPath = generateDeJongAttractorPath();
-    createCoreNetwork(attractorPath);
-    createDataCores(attractorPath);
-    createEntropyCloud();
+    // Layer 1: The Core Entity (InstancedMesh)
+    const coreCount = 1200;
+    const coreBaseGeometry = new THREE.BoxGeometry(0.02, 2.5, 0.02);
+    const coreMaterial = new THREE.MeshStandardMaterial({
+        metalness: 0.9,
+        roughness: 0.2,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.2
+    });
 
-    // --- Event Listeners ---
+    core = new THREE.InstancedMesh(coreBaseGeometry, coreMaterial, coreCount);
+    core.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    core.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(coreCount * 3), 3);
+    core.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    scene.add(core);
+
+    const p = 3, q = 7;
+    const radius = 10;
+    const tube = 3.5;
+
+    for (let i = 0; i < coreCount; i++) {
+        const u = (i / coreCount) * Math.PI * 2 * q;
+        const R = Math.cos(q / p * u) * tube + radius;
+        const x = R * Math.cos(u);
+        const y = R * Math.sin(u);
+        const z = Math.sin(q / p * u) * tube;
+
+        dummy.position.set(x, y, z);
+
+        const next_u = ((i + 1) / coreCount) * Math.PI * 2 * q;
+        const next_R = Math.cos(q / p * next_u) * tube + radius;
+        const next_x = next_R * Math.cos(next_u);
+        const next_y = next_R * Math.sin(next_u);
+        const next_z = Math.sin(q / p * next_u) * tube;
+
+        dummy.lookAt(next_x, next_y, next_z);
+        dummy.updateMatrix();
+        core.setMatrixAt(i, dummy.matrix);
+
+        color.setHSL((i / coreCount) * 0.2 + 0.55, 0.8, 0.5);
+        core.setColorAt(i, color);
+    }
+    core.instanceMatrix.needsUpdate = true;
+    core.instanceColor.needsUpdate = true;
+
+
+    // Layer 2: The Perceptual Field (Points)
+    const fieldCount = 4000;
+    const fieldGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(fieldCount * 3);
+    const colors = new Float32Array(fieldCount * 3);
+    const phases = new Float32Array(fieldCount * 3);
+
+    for (let i = 0; i < fieldCount; i++) {
+        const r = 8 + Math.random() * 12;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos((Math.random() * 2) - 1);
+
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+
+        color.setHSL(0.6 + Math.random() * 0.15, 1.0, 0.5 + Math.random() * 0.2);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+
+        phases[i * 3] = Math.random() * Math.PI * 2;
+        phases[i * 3 + 1] = 0.5 + Math.random() * 1.5;
+        phases[i * 3 + 2] = Math.random() * 0.02 + 0.01;
+    }
+
+    fieldGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+    fieldGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
+    fieldGeometry.setAttribute('phase', new THREE.BufferAttribute(phases, 3));
+
+    const fieldMaterial = new THREE.PointsMaterial({
+        size: 0.1,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true,
+    });
+
+    field = new THREE.Points(fieldGeometry, fieldMaterial);
+    scene.add(field);
+
     window.addEventListener('resize', onWindowResize);
-
     animate();
 }
 
-/**
- * Generates a complex path using the De Jong Attractor algorithm.
- * This forms the backbone of our visual structure.
- * @returns {Array<THREE.Vector3>} An array of points.
- */
-function generateDeJongAttractorPath() {
-    const points = [];
-    let x = 0.1, y = 0.1;
-
-    // These parameters create a complex, organic form.
-    const a = 1.641, b = -1.902, c = -1.249, d = -1.578;
-
-    for (let i = 0; i < PATH_POINTS; i++) {
-        const x_next = Math.sin(a * y) - Math.cos(b * x);
-        const y_next = Math.sin(c * x) - Math.cos(d * y);
-        x = x_next;
-        y = y_next;
-        // The attractor is 2D, we add a Z component for spatial depth using a slow sine wave.
-        const z = Math.sin(i / 100.0) * Math.cos(i / 300.0);
-        points.push(new THREE.Vector3(x * 6, y * 6, z * 6));
-    }
-    return points;
-}
-
-/**
- * Layer 1: The dynamic topological line network.
- * Represents the "Ghost Protocol" reshaping existence.
- * @param {Array<THREE.Vector3>} path - The points to connect.
- */
-function createCoreNetwork(path) {
-    const lineVertices = [];
-    // Create a woven, topological connection pattern instead of a simple chain.
-    for (let i = 0; i < path.length; i++) {
-        const p1 = path[i];
-        // Connect to nearby points with a stride to create a "braided" look.
-        const p2 = path[(i + 3) % path.length];
-        const p3 = path[(i + 7) % path.length];
-        if (p1.distanceTo(p2) < 2.0) {
-            lineVertices.push(p1.x, p1.y, p1.z);
-            lineVertices.push(p2.x, p2.y, p2.z);
-        }
-        if (p1.distanceTo(p3) < 2.0) {
-            lineVertices.push(p1.x, p1.y, p1.z);
-            lineVertices.push(p3.x, p3.y, p3.z);
-        }
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(lineVertices, 3));
-
-    const material = new THREE.LineBasicMaterial({
-        color: palette.lines,
-        transparent: true,
-        opacity: 0.3,
-        blending: THREE.AdditiveBlending,
-    });
-
-    coreNetwork = new THREE.LineSegments(geometry, material);
-    scene.add(coreNetwork);
-}
-
-/**
- * Layer 2: Instanced reflective cores.
- * The "Ethereal Gleam" and "无形之镜" (formless mirrors).
- * @param {Array<THREE.Vector3>} path - Points to place instances on.
- */
-function createDataCores(path) {
-    const geometry = new THREE.IcosahedronGeometry(0.1, 1);
-    const material = new THREE.MeshStandardMaterial({
-        metalness: 0.9,
-        roughness: 0.2,
-        emissive: 0x111111,
-        // vertexColors is not needed as we use instanceColor
-    });
-
-    dataCores = new THREE.InstancedMesh(geometry, material, CORE_COUNT);
-    dataCores.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    
-    // IMPORTANT: Pre-allocate instanceColor buffer for r160 compatibility
-    const colorArray = new Float32Array(CORE_COUNT * 3);
-    const instanceColor = new THREE.InstancedBufferAttribute(colorArray, 3);
-    instanceColor.setUsage(THREE.DynamicDrawUsage);
-    dataCores.geometry.setAttribute('instanceColor', instanceColor);
-
-    for (let i = 0; i < CORE_COUNT; i++) {
-        // Distribute instances along the path
-        const index = Math.floor(i * (path.length / CORE_COUNT));
-        dummy.position.copy(path[index]);
-        dummy.scale.setScalar(0.5 + Math.random() * 0.7);
-        dummy.updateMatrix();
-        dataCores.setMatrixAt(i, dummy.matrix);
-        
-        // Set initial color
-        tempColor.setHSL(Math.random(), 0.8, 0.5);
-        dataCores.setColorAt(i, tempColor);
-    }
-    
-    dataCores.instanceMatrix.needsUpdate = true;
-    dataCores.instanceColor.needsUpdate = true;
-    
-    scene.add(dataCores);
-}
-
-/**
- * Layer 3: The surrounding particle cloud.
- * Represents "Data Entropy" and the "Abyss of Consciousness".
- */
-function createEntropyCloud() {
-    const positions = new Float32Array(PARTICLE_COUNT * 3);
-    const colors = new Float32Array(PARTICLE_COUNT * 3);
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const i3 = i * 3;
-        // Spherical distribution with some randomness for a nebula-like feel
-        const radius = 8 + Math.random() * 8;
-        const phi = Math.acos((2 * Math.random()) - 1);
-        const theta = Math.random() * Math.PI * 2;
-
-        positions[i3] = radius * Math.cos(theta) * Math.sin(phi);
-        positions[i3 + 1] = radius * Math.sin(theta) * Math.sin(phi);
-        positions[i3 + 2] = radius * Math.cos(phi);
-
-        tempColor.setHSL(0.6 + (Math.random() - 0.5) * 0.2, 1.0, 0.7);
-        colors[i3] = tempColor.r;
-        colors[i3 + 1] = tempColor.g;
-        colors[i3 + 2] = tempColor.b;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const material = new THREE.PointsMaterial({
-        size: 0.05,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.7,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-    });
-
-    entropyCloud = new THREE.Points(geometry, material);
-    scene.add(entropyCloud);
-}
-
-
 function onWindowResize() {
-    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function animate(time) {
+function animate() {
     requestAnimationFrame(animate);
 
-    const t = time * 0.001; // Time in seconds
+    const t = clock.getElapsedTime();
 
-    // --- SLOW LAYER ANIMATION (Cycles: 30-90s) ---
-    // Camera orbital drift
-    const camSpeed = 0.05; // T = 6.28 / 0.05 ≈ 125s, a bit slower but fine
-    camera.position.x = 25 * Math.cos(t * camSpeed);
-    camera.position.z = 25 * Math.sin(t * camSpeed);
+    // Fast Layer Animation: Core Entity
+    const corePulse = (Math.sin(t * 1.2) + 1) / 2;
+    core.material.emissiveIntensity = corePulse * 0.4 + 0.1;
+
+    for (let i = 0; i < core.count; i++) {
+        core.getMatrixAt(i, matrix);
+        matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+
+        const phase = (i / core.count) * Math.PI * 2;
+        const scaleFactor = 1.0 + Math.sin(t * 2.5 + phase) * 0.15;
+        dummy.scale.set(scaleFactor, 1, scaleFactor);
+
+        dummy.updateMatrix();
+        core.setMatrixAt(i, dummy.matrix);
+
+        core.getColorAt(i, color);
+        const originalHue = (i / core.count) * 0.2 + 0.55;
+        const hueShift = Math.sin(t * 0.8 + phase) * 0.05;
+        color.setHSL(originalHue + hueShift, 0.8, 0.4 + corePulse * 0.3);
+        core.setColorAt(i, color);
+    }
+    core.instanceMatrix.needsUpdate = true;
+    core.instanceColor.needsUpdate = true;
+
+    // Fast Layer Animation: Perceptual Field
+    const positions = field.geometry.attributes.position.array;
+    const phases = field.geometry.attributes.phase.array;
+
+    for (let i = 0; i < field.geometry.attributes.position.count; i++) {
+        const i3 = i * 3;
+        const phaseX = phases[i3];
+        const amp = phases[i3 + 1];
+        const freq = phases[i3 + 2];
+
+        tempVec3.fromArray(positions, i3);
+        const displacement = Math.sin(t * amp + phaseX) * 0.5;
+        tempVec3.normalize().multiplyScalar(displacement);
+        
+        positions[i3] += tempVec3.x * freq;
+        positions[i3+1] += tempVec3.y * freq;
+        positions[i3+2] += tempVec3.z * freq;
+    }
+    field.geometry.attributes.position.needsUpdate = true;
+
+
+    // Slow Layer Animation
+    const slowTime = t * 0.07;
+    camera.position.x = 35 * Math.cos(slowTime);
+    camera.position.z = 35 * Math.sin(slowTime);
     camera.lookAt(scene.position);
 
-    // Global structure slow rotation
-    if (coreNetwork) {
-        coreNetwork.rotation.y = t * 0.04;
-    }
-    if (dataCores) {
-        dataCores.rotation.y = t * 0.04;
-    }
-    
-    // Fog density breathing
-    scene.fog.density = 0.04 + Math.sin(t * 0.1) * 0.005;
-
-
-    // --- FAST LAYER ANIMATION (Cycles: 2-8s) ---
-    // Animate instanced data cores
-    if (dataCores) {
-        const pulseSpeed = 1.5; // T = 6.28 / 1.5 ≈ 4.2s
-        const colorSpeed = 0.8; // T = 6.28 / 0.8 ≈ 7.8s
-
-        for (let i = 0; i < CORE_COUNT; i++) {
-            const phase = i / CORE_COUNT * Math.PI * 2;
-
-            // Individual rotation/pulsing
-            dataCores.getMatrixAt(i, dummy.matrix);
-            const scale = 0.8 + (Math.sin(t * pulseSpeed + phase) + 1) * 0.2;
-            dummy.scale.set(scale, scale, scale);
-            dummy.rotation.x += 0.01;
-            dummy.updateMatrix();
-            dataCores.setMatrixAt(i, dummy.matrix);
-
-            // Dynamic color pulse (Data Pulse)
-            const hue = (t * 0.05 + phase / (Math.PI * 2)) % 1;
-            const lightness = 0.5 + Math.sin(t * colorSpeed * 2.0 + phase) * 0.2;
-            tempColor.setHSL(hue, 0.8, lightness);
-            dataCores.setColorAt(i, tempColor);
+    scene.children.forEach(child => {
+        if (child.isPointLight) {
+            const lightTime = child === scene.children[2] ? t * 0.2 : t * -0.15;
+            child.position.x = 10 * Math.sin(lightTime * 1.1);
+            child.position.y = 8 * Math.cos(lightTime * 1.3);
+            child.position.z = 8 * Math.sin(lightTime * 1.2);
         }
-        dataCores.instanceMatrix.needsUpdate = true;
-        dataCores.instanceColor.needsUpdate = true;
-    }
-    
-    // Animate line network material
-    if (coreNetwork) {
-        // Emissive-like color pulse
-        const lineHue = (t * 0.1) % 1.0;
-        coreNetwork.material.color.setHSL(lineHue, 0.7, 0.55 + Math.sin(t * 1.2) * 0.1);
-    }
+    });
 
-    // Animate particle cloud
-    if (entropyCloud) {
-        entropyCloud.rotation.y = t * 0.15;
-        entropyCloud.rotation.x = t * 0.1;
-    }
+    const bgHue = 0.6 + (Math.sin(t * 0.04) * 0.05);
+    scene.background.setHSL(bgHue, 0.1, 0.08);
 
     renderer.render(scene, camera);
 }
 
-// --- START ---
 init();
         } catch(err) {
             console.error("Three.js Runtime Error:", err);

@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGENTSART // EVOLUTION</title>
+    <title>幻棱 · 幻</title>
     <meta name="description" content="{description}">
-    <meta name="generator" content="AGENTSART - Iteration {iteration}">
+    <meta name="generator" content="幻棱 - Iteration {iteration}">
     <meta name="created" content="{creation_date}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
@@ -244,7 +244,7 @@
         <div class="overlay-concept">{director_concept}</div>
         <div class="desc">{narrative_summary}</div>
         <div class="meta">
-            AGENTSART SYSTEM<br>
+            幻棱 PHANTAPRISM<br>
             Autonomous Rendering<br>
             {creation_date}
         </div>
@@ -269,6 +269,8 @@
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
             let inFlight = false;
+            let _idleShown = false;
+            let _fetchFailCount = 0;
             function parseStateIteration(raw) {
                 const n = Math.trunc(Number(raw));
                 return Number.isFinite(n) ? n : null;
@@ -284,6 +286,37 @@
                     window.location.href = window.location.pathname.split('?')[0] + '?t=' + Date.now();
                 }
             }
+            function showIdleState() {
+                if (_idleShown) return;
+                _idleShown = true;
+                document.querySelector('.overlay')?.style.setProperty('display', 'none');
+                document.querySelector('.iteration-badge')?.style.setProperty('display', 'none');
+                var loading = document.getElementById('loading');
+                if (loading) {
+                    loading.innerHTML = '<div class="spinner"></div><div class="loading-primary">幻棱 · 等待凝视</div><div class="loading-sub">Awaiting the First Gaze</div>';
+                    loading.style.cssText = 'display:flex;opacity:1;';
+                    loading.className = 'loading loading--boot';
+                }
+                if (!window.fallbackRendered) {
+                    renderFallback();
+                    window.fallbackRendered = true;
+                }
+                if (loading) {
+                    setTimeout(function() { loading.style.opacity = '0'; setTimeout(function() { loading.style.display = 'none'; }, 1000); }, 1500);
+                }
+            }
+            function showConnectionLost() {
+                if (document.getElementById('conn-lost-overlay')) return;
+                var el = document.createElement('div');
+                el.id = 'conn-lost-overlay';
+                el.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(5,2,10,0.82);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Inter,sans-serif;color:rgba(255,255,255,0.7);backdrop-filter:blur(8px)';
+                el.innerHTML = '<div style="font-size:14px;letter-spacing:0.15em;margin-bottom:8px;color:rgba(212,175,55,0.8)">系统重启中</div><div style="font-size:11px;opacity:0.55;letter-spacing:0.12em">Reconnecting…</div>';
+                document.body.appendChild(el);
+            }
+            function hideConnectionLost() {
+                var el = document.getElementById('conn-lost-overlay');
+                if (el) el.remove();
+            }
             async function checkNewVersion() {
                 if (inFlight) return;
                 inFlight = true;
@@ -291,10 +324,24 @@
                     const url = new URL('state.json', window.location.href);
                     url.searchParams.set('t', String(Date.now()));
                     const res = await fetch(url.href, { cache: 'no-store' });
-                    if (!res.ok) return;
+                    if (!res.ok) {
+                        _fetchFailCount++;
+                        if (_fetchFailCount >= 3) showConnectionLost();
+                        return;
+                    }
+                    _fetchFailCount = 0;
+                    hideConnectionLost();
                     const state = await res.json();
                     const srvIter = parseStateIteration(state.iteration);
                     const run = typeof state.last_run === 'string' ? state.last_run : '';
+                    if (srvIter === null) {
+                        showIdleState();
+                        return;
+                    }
+                    if (_idleShown && srvIter !== null) {
+                        reloadPage();
+                        return;
+                    }
                     if (srvIter !== null && PAGE_ITER !== null && srvIter !== PAGE_ITER) {
                         console.log('Evolution: iteration mismatch, reloading...');
                         reloadPage();
@@ -311,7 +358,10 @@
                         return;
                     }
                     if (run) lastKnownRun = run;
-                } catch (e) { }
+                } catch (e) {
+                    _fetchFailCount++;
+                    if (_fetchFailCount >= 3) showConnectionLost();
+                }
                 finally { inFlight = false; }
             }
             setInterval(checkNewVersion, 2200);
@@ -336,7 +386,7 @@
             loading.style.padding = '10px 24px';
             loading.style.borderRadius = '8px';
             loading.style.border = '1px solid rgba(212, 175, 55, 0.3)';
-            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">AGENTSART · RECOMPILING SCENE</span>';
+            loading.innerHTML = '<span style="color:rgba(212,175,55,0.85);font-size:11px;letter-spacing:0.1em">幻棱 · 重构场景中</span>';
         }
 
         function recoveryReloadAfterGenerateError() {
@@ -368,8 +418,8 @@
             var ctr = document.getElementById('canvas-container');
             ctr.innerHTML = '';
             var scene = new THREE.Scene();
-            scene.background = new THREE.Color().setHSL(0.62, 0.22, 0.045);
-            scene.fog = new THREE.FogExp2(scene.background, 0.038);
+            scene.background = new THREE.Color().setHSL(0.62, 0.22, 0.065);
+            scene.fog = new THREE.FogExp2(scene.background, 0.014);
 
             var cam = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 260);
             cam.position.set(0, 1.2, 46);
@@ -514,7 +564,7 @@
                 Lc.position.set(Math.sin(t * 0.19) * -orbitR, -6 * Math.cos(t * 0.14), Math.cos(t * 0.19) * orbitR);
                 Lm.position.set(Math.cos(t * 0.24 + 1.7) * orbitR * 0.75, 12 * Math.sin(t * 0.11), Math.sin(t * 0.24 + 1.7) * orbitR * 0.75);
 
-                scene.fog.density = 0.034 + Math.sin(t * 0.12) * 0.008;
+                scene.fog.density = 0.012 + Math.sin(t * 0.12) * 0.003;
 
                 cam.position.x = Math.sin(t * 0.055) * 5;
                 cam.position.y = 1.2 + Math.cos(t * 0.048) * 3.5;
