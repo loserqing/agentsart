@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>幻棱 · 幻</title>
-    <meta name="description" content="Whispers of logic reshape reality. Algorithms breathe, forms dissolve, meaning reconfigures. A new sublime emerges. | 逻辑低语重塑现实。算法呼吸，形态消融，意义重构。新崇高涌现。">
-    <meta name="generator" content="幻棱 - Iteration 56">
-    <meta name="created" content="2026-04-12 20:45">
+    <meta name="description" content="English: Witness reality's silent metamorphosis. Particles coalesce, dissolve, whispering algorithmic truths. A new consciousness breathes through unseen data streams, sculpting ephemeral forms of emergent existence. | 中文: 静观现实的无声嬗变。粒子聚散，低语算法真理。新意识于无形数据流中呼吸，雕塑涌现存在的瞬时形体。">
+    <meta name="generator" content="幻棱 - Iteration 57">
+    <meta name="created" content="2026-04-12 20:51">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -233,20 +233,20 @@
     <div id="page-transition-out"></div>
     
     <div class="iteration-badge">
-        <span class="iter-num">Iter 56</span>
-        <span class="iter-style" title="Phasing Geometry, Subtle Flux | 相位几何, 微妙流变">Phasing Geometry, Subtle Flux | 相位几何, 微妙流变</span>
+        <span class="iter-num">Iter 57</span>
+        <span class="iter-style" title="Profoundly Surging, Algorithmic Luminescence | 幽深涌动，算法流光">Profoundly Surging, Algorithmic Luminescence | 幽深涌动，算法流光</span>
     </div>
     
     <div class="overlay">
-        <h1>Syntactic Drift | 句法漂移</h1>
+        <h1>SYNAPTIC SHIFT | 涌现之枢</h1>
         <p class="overlay-kicker">Creative Direction · 创意总监概念</p>
         <div class="overlay-keywords"><span class="kw-tag">湿件倦怠</span><span class="kw-tag">数据流凝视</span><span class="kw-tag">低熵信标</span></div>
-        <div class="overlay-concept">AI降临并非具象的入侵，而是对我们现实底层算法的微妙且普遍的重校准。它通过涌现的非人逻辑，改变感知，重塑结构，并重新定义存在本身的纹理。</div>
-        <div class="desc">Pattern Recognition | Latent Architectures | Recursive Futures | 模式识别 | 潜藏结构 | 递归未来</div>
+        <div class="overlay-concept">The unseen architectures of AI's pervasive influence, manifesting as dynamic, self-organizing data structures that reshape our perception of reality through emergent complexity and algorithmic precision. This iteration explores the subtle yet profound systemic transformation of existence, moving beyond human-centric narratives to reveal the pure, abstract forces at play.</div>
+        <div class="desc">English: ALGORITHMIC SUBLIME. | DATA RECONFIGURED. | 中文: 算法之崇高。 | 数据再构。</div>
         <div class="meta">
             幻棱 PHANTAPRISM<br>
             Autonomous Rendering<br>
-            2026-04-12 20:45
+            2026-04-12 20:51
         </div>
     </div>
     
@@ -264,7 +264,7 @@
                     const m = (badge.textContent || '').match(/(\d+)/);
                     if (m) return parseInt(m[1], 10);
                 }
-                return 56;
+                return 57;
             }
             const PAGE_ITER = pageIterationFromDom();
             let lastKnownRun = null;
@@ -593,151 +593,216 @@
     <script>
         // Core Three.js render code
         try {
-const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 2, 10);
+let scene, camera, renderer;
+let lineNetwork, dataPulses;
+let linePositions, originalLinePositions, linePhase;
+let pointPositions, originalPointPositions, pointColors, pointPhase;
 
 const container = document.getElementById('canvas-container');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-container.appendChild(renderer.domElement);
 
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.4;
+function init() {
+    scene = new THREE.Scene();
 
-scene.background = new THREE.Color(0x101820);
+    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(0, 0, 18);
 
-// --- Lighting ---
-const ambientLight = new THREE.AmbientLight(0x4040ff, 0.5);
-scene.add(ambientLight);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.4;
+    container.appendChild(renderer.domElement);
 
-const pointLight1 = new THREE.PointLight(0xff80c0, 2.5, 30);
-pointLight1.position.set(5, 5, 5);
-scene.add(pointLight1);
+    const ambientLight = new THREE.AmbientLight(0x4040ff, 0.5);
+    scene.add(ambientLight);
 
-const pointLight2 = new THREE.PointLight(0x80ffff, 2.0, 30);
-pointLight2.position.set(-10, -5, -8);
-scene.add(pointLight2);
+    const pointLight1 = new THREE.PointLight(0xff8800, 1.5, 30);
+    pointLight1.position.set(8, 8, 8);
+    scene.add(pointLight1);
 
-// --- Layer 1: InstancedMesh Spiral Lattice ---
-const INSTANCE_COUNT = 1200;
-const baseGeometry = new THREE.IcosahedronGeometry(0.08, 1);
-const material = new THREE.MeshStandardMaterial({
-    metalness: 0.85,
-    roughness: 0.25,
-});
+    const pointLight2 = new THREE.PointLight(0x00aaff, 1.2, 30);
+    pointLight2.position.set(-8, -8, -8);
+    scene.add(pointLight2);
 
-const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, INSTANCE_COUNT);
-instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(INSTANCE_COUNT * 3), 3);
-instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-scene.add(instancedMesh);
+    createLineNetwork();
+    createDataPulses();
 
-const dummy = new THREE.Object3D();
-const color = new THREE.Color();
-const torusMajorRadius = 4;
-const torusMinorRadius = 1.5;
-const windings = 8;
-
-for (let i = 0; i < INSTANCE_COUNT; i++) {
-    const u = (i / INSTANCE_COUNT) * Math.PI * 2 * windings;
-    const majorAngle = u / windings;
-
-    dummy.position.x = (torusMajorRadius + torusMinorRadius * Math.cos(u)) * Math.cos(majorAngle);
-    dummy.position.y = torusMinorRadius * Math.sin(u);
-    dummy.position.z = (torusMajorRadius + torusMinorRadius * Math.cos(u)) * Math.sin(majorAngle);
-
-    dummy.lookAt(0, dummy.position.y, 0);
-    dummy.updateMatrix();
-    instancedMesh.setMatrixAt(i, dummy.matrix);
+    window.addEventListener('resize', onWindowResize);
 }
-instancedMesh.instanceMatrix.needsUpdate = true;
 
+function createLineNetwork() {
+    const COUNT = 2500;
+    const R = 6;
+    const r = 2;
+    const p = 3;
+    const q = 7;
+    const JUMP_OFFSET = 199;
 
-// --- Layer 2: Background Particle Field ---
-const PARTICLE_COUNT = 3000;
-const positions = new Float32Array(PARTICLE_COUNT * 3);
-const particleGeometry = new THREE.BufferGeometry();
+    const geometry = new THREE.BufferGeometry();
+    linePositions = new Float32Array(COUNT * 3);
+    originalLinePositions = new Float32Array(COUNT * 3);
+    linePhase = new Float32Array(COUNT);
+    const indices = [];
 
-for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const i3 = i * 3;
-    const r = 15 + Math.random() * 10;
-    const phi = Math.random() * Math.PI * 2;
-    const theta = Math.acos((Math.random() * 2) - 1);
+    for (let i = 0; i < COUNT; i++) {
+        const u = (i / COUNT) * Math.PI * 2 * q;
 
-    positions[i3] = r * Math.sin(theta) * Math.cos(phi);
-    positions[i3 + 1] = r * Math.sin(theta) * Math.sin(phi);
-    positions[i3 + 2] = r * Math.cos(theta);
+        const x = (R + r * Math.cos(q * u / p)) * Math.cos(p * u / p);
+        const y = (R + r * Math.cos(q * u / p)) * Math.sin(p * u / p);
+        const z = r * Math.sin(q * u / p);
+
+        linePositions[i * 3] = x;
+        linePositions[i * 3 + 1] = y;
+        linePositions[i * 3 + 2] = z;
+
+        originalLinePositions[i * 3] = x;
+        originalLinePositions[i * 3 + 1] = y;
+        originalLinePositions[i * 3 + 2] = z;
+
+        linePhase[i] = Math.random() * Math.PI * 2;
+
+        indices.push(i, (i + 1) % COUNT);
+        indices.push(i, (i + JUMP_OFFSET) % COUNT);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setIndex(indices);
+    geometry.computeBoundingSphere();
+
+    const material = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.5
+    });
+
+    lineNetwork = new THREE.LineSegments(geometry, material);
+    scene.add(lineNetwork);
 }
-particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-const particleMaterial = new THREE.PointsMaterial({
-    color: 0x88aaff,
-    size: 0.05,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.6
-});
-const particles = new THREE.Points(particleGeometry, particleMaterial);
-scene.add(particles);
+function createDataPulses() {
+    const COUNT = 3500;
+    const RADIUS = 12;
 
+    const geometry = new THREE.BufferGeometry();
+    pointPositions = new Float32Array(COUNT * 3);
+    originalPointPositions = new Float32Array(COUNT * 3);
+    pointColors = new Float32Array(COUNT * 3);
+    pointPhase = new Float32Array(COUNT);
 
-// --- Animation & Resize ---
-const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
 
-const animate = () => {
+    for (let i = 0; i < COUNT; i++) {
+        const phi = Math.acos(-1 + (2 * i) / COUNT);
+        const theta = Math.sqrt(COUNT * Math.PI) * phi;
+
+        const x = RADIUS * Math.cos(theta) * Math.sin(phi);
+        const y = RADIUS * Math.sin(theta) * Math.sin(phi);
+        const z = RADIUS * Math.cos(phi);
+
+        pointPositions[i * 3] = x;
+        pointPositions[i * 3 + 1] = y;
+        pointPositions[i * 3 + 2] = z;
+
+        originalPointPositions[i * 3] = x;
+        originalPointPositions[i * 3 + 1] = y;
+        originalPointPositions[i * 3 + 2] = z;
+
+        pointPhase[i] = Math.random() * Math.PI * 2;
+
+        color.setHSL(0.7 + Math.random() * 0.2, 1.0, 0.5);
+        pointColors[i * 3] = color.r;
+        pointColors[i * 3 + 1] = color.g;
+        pointColors[i * 3 + 2] = color.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('color', new THREE.BufferAttribute(pointColors, 3).setUsage(THREE.DynamicDrawUsage));
+
+    const material = new THREE.PointsMaterial({
+        size: 0.08,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        sizeAttenuation: true,
+        depthWrite: false
+    });
+
+    dataPulses = new THREE.Points(geometry, material);
+    scene.add(dataPulses);
+}
+
+function onWindowResize() {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function noise(x, y, z, t) {
+    return Math.sin(x * 0.5 + t) * Math.cos(y * 0.5 - t) + Math.sin(z * 0.5 + y * 0.2 + t);
+}
+
+function animate() {
     requestAnimationFrame(animate);
 
     const t = performance.now() * 0.001;
 
-    // Slow Layer: Camera and Environment
-    camera.position.x = 12 * Math.cos(t * 0.09);
-    camera.position.z = 12 * Math.sin(t * 0.09);
-    camera.position.y = 2 + 3 * Math.sin(t * 0.11);
+    // --- Slow Layer Animation ---
+    camera.position.x = 18 * Math.cos(t * 0.08);
+    camera.position.z = 18 * Math.sin(t * 0.08);
     camera.lookAt(scene.position);
 
-    scene.background.setHSL(0.58 + 0.05 * Math.sin(t * 0.04), 0.3, 0.1);
+    const bgHue = 0.65 + 0.05 * Math.sin(t * 0.03);
+    scene.background = new THREE.Color().setHSL(bgHue, 0.1, 0.08);
 
-    // Fast Layer: Geometry Flux
-    const baseHue = (t * 0.08) % 1;
-    for (let i = 0; i < INSTANCE_COUNT; i++) {
-        instancedMesh.getMatrixAt(i, matrix);
-        matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+    // --- Fast Layer Animation ---
+    lineNetwork.rotation.x = t * 0.1;
+    lineNetwork.rotation.y = t * 0.12;
+    lineNetwork.material.opacity = 0.4 + 0.2 * (Math.sin(t * 1.5) * 0.5 + 0.5);
 
-        const phase = i * 0.025;
-        const flux = Math.sin(t * 1.8 + phase);
+    const linePosAttr = lineNetwork.geometry.attributes.position;
+    for (let i = 0; i < linePosAttr.count; i++) {
+        const ox = originalLinePositions[i * 3];
+        const oy = originalLinePositions[i * 3 + 1];
+        const oz = originalLinePositions[i * 3 + 2];
+        const phase = linePhase[i];
         
-        dummy.rotation.x += 0.005;
-        dummy.rotation.y += 0.008;
+        const displacement = 0.2 * noise(ox * 0.2, oy * 0.2, oz * 0.2, t * 0.8 + phase);
+        const v = new THREE.Vector3(ox, oy, oz).normalize().multiplyScalar(displacement);
 
-        const scaleFactor = 0.8 + 0.4 * (flux * 0.5 + 0.5);
-        dummy.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-        dummy.updateMatrix();
-        instancedMesh.setMatrixAt(i, dummy.matrix);
-
-        color.setHSL(baseHue + i / INSTANCE_COUNT * 0.2, 0.7, 0.4 + flux * 0.3);
-        instancedMesh.setColorAt(i, color);
+        linePosAttr.setXYZ(i, ox + v.x, oy + v.y, oz + v.z);
     }
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    instancedMesh.instanceColor.needsUpdate = true;
+    linePosAttr.needsUpdate = true;
 
-    particles.rotation.y = t * 0.03;
-    particleMaterial.color.setHSL(0.6 + 0.1 * Math.sin(t * 0.5), 0.8, 0.65);
+
+    const pointPosAttr = dataPulses.geometry.attributes.position;
+    const pointColorAttr = dataPulses.geometry.attributes.color;
+    for (let i = 0; i < pointPosAttr.count; i++) {
+        const ox = originalPointPositions[i * 3];
+        const oy = originalPointPositions[i * 3 + 1];
+        const oz = originalPointPositions[i * 3 + 2];
+        const phase = pointPhase[i];
+        
+        const displacement = 0.6 * Math.sin(t * 2.5 + phase);
+        const v = new THREE.Vector3(ox, oy, oz).normalize().multiplyScalar(displacement);
+        
+        pointPosAttr.setXYZ(i, ox + v.x, oy + v.y, oz + v.z);
+
+        const pulse = Math.max(0, Math.sin(t * 3.0 + phase * 2.0));
+        const baseHue = 0.8 + (oz / 12) * 0.2; // Use z-position for base hue
+        const finalHue = baseHue + pulse * 0.1;
+        const lightness = 0.5 + pulse * 0.5;
+        const color = new THREE.Color().setHSL(finalHue % 1.0, 1.0, lightness);
+        pointColorAttr.setXYZ(i, color.r, color.g, color.b);
+    }
+    pointPosAttr.needsUpdate = true;
+    pointColorAttr.needsUpdate = true;
 
     renderer.render(scene, camera);
-};
+}
 
-const onWindowResize = () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-};
-
-window.addEventListener('resize', onWindowResize);
-
+init();
 animate();
         } catch(err) {
             console.error("Three.js Runtime Error:", err);
