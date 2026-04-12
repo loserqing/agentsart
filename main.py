@@ -395,7 +395,7 @@ def orchestrator_loop():
     orchestrator = FullOrchestrator(model=model_name, on_event=_on_orchestrator_event)
     print(f"📎 编排器 LLM：{model_name}")
 
-    iteration_gap_default = float(os.getenv("AGENTSART_ITERATION_INTERVAL_SEC", "300"))
+    iteration_gap_default = float(os.getenv("AGENTSART_ITERATION_INTERVAL_SEC", "0"))
 
     while not shutdown_event.is_set():
         try:
@@ -468,7 +468,7 @@ def orchestrator_loop():
             gc.collect()
 
             # 两轮「迭代开始」之间至少间隔 iteration_gap（默认 300s = 5 分钟，可用 AGENTSART_ITERATION_INTERVAL_SEC 调整）
-            iteration_gap = float(os.getenv("AGENTSART_ITERATION_INTERVAL_SEC", "300"))
+            iteration_gap = float(os.getenv("AGENTSART_ITERATION_INTERVAL_SEC", "0"))
             wait_seconds = max(0.0, iteration_gap - duration)
             eta = end_time + timedelta(seconds=wait_seconds)
             _state_update(
